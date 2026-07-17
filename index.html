@@ -703,6 +703,10 @@ body {
             <label class="toggle"><input type="checkbox" id="setting-mute"><span class="slider"></span></label>
         </div>
         <div class="setting-row">
+            <label>数字禁用</label>
+            <label class="toggle"><input type="checkbox" id="setting-disable"><span class="slider"></span></label>
+        </div>
+        <div class="setting-row">
             <label>红心数</label>
             <select id="setting-hearts">
                 <option value="1">1</option>
@@ -1784,6 +1788,7 @@ class InputHandler {
             document.getElementById('setting-mute').checked = this.game.sound.isMuted();
             document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'light';
             document.getElementById('setting-hearts').value = this.game.maxLives;
+            document.getElementById('setting-disable').checked = this.game.disableImpossible;
             this.game.dialogs.showSettings();
         });
         document.getElementById('btn-close-settings')?.addEventListener('click', () => this.game.dialogs.hide());
@@ -1806,11 +1811,15 @@ class InputHandler {
             if (v >= 1 && v <= 5) {
                 this.game.maxLives = v;
                 try { localStorage.setItem('sudoku_maxLives', v); } catch (e) {}
-                // Only update current lives if game not started
                 if (!this.game.gameStarted) {
                     this.game.lives = v;
                 }
             }
+        });
+        document.getElementById('setting-disable')?.addEventListener('change', (e) => {
+            this.game.disableImpossible = e.target.checked;
+            try { localStorage.setItem('sudoku_disableImpossible', e.target.checked); } catch (e) {}
+            this.game._updateNumPadHighlight();
         });
 
         // Confirm dialog
@@ -2113,6 +2122,7 @@ class SudokuGame {
         this._pendingHint = null;
         this.lives = 3;
         this.maxLives = 3;
+        this.disableImpossible = false;
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
@@ -2188,6 +2198,7 @@ class SudokuGame {
         try {
             const v = parseInt(localStorage.getItem('sudoku_maxLives'));
             if (v >= 1 && v <= 5) this.maxLives = v;
+            this.disableImpossible = localStorage.getItem('sudoku_disableImpossible') === 'true';
         } catch (e) {}
     }
 
@@ -2647,7 +2658,7 @@ class SudokuGame {
                 if (btn) btn.classList.add('note-highlight');
             }
         }
-        if (!this.board.isGiven(r, c)) {
+        if (this.board.isEmpty(r, c)) {
             this._checkLastCandidate(r, c);
         }
     }
@@ -2694,8 +2705,8 @@ class SudokuGame {
             if (btn) btn.classList.add('last-candidate');
         }
 
-        // Disable impossible numbers (not in candidates)
-        if (allCands.size > 0) {
+        // Disable impossible numbers (only when setting enabled)
+        if (this.disableImpossible && allCands.size > 0) {
             for (let n = 1; n <= 9; n++) {
                 const btn = document.getElementById('num-' + n);
                 if (btn) {
@@ -2705,11 +2716,6 @@ class SudokuGame {
                         btn.classList.remove('impossible');
                     }
                 }
-            }
-        } else {
-            for (let n = 1; n <= 9; n++) {
-                const btn = document.getElementById('num-' + n);
-                if (btn) btn.classList.remove('impossible');
             }
         }
     }
