@@ -178,32 +178,56 @@ body {
 }
 .start-continue:hover { background: var(--highlight-selected); }
 
-/* ── Top Toolbar ── */
-#toolbar-top {
+/* ── Top Navigation ── */
+#top-nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px;
+    padding: 4px 8px;
     background: var(--toolbar-bg);
-    box-shadow: var(--toolbar-shadow);
     z-index: 10;
-    min-height: 48px;
-    gap: 8px;
+    min-height: 40px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-#toolbar-top .title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: var(--text-primary);
+.nav-left, .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
 }
+
+/* ── Info Bar ── */
+#info-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: var(--toolbar-bg);
+    z-index: 10;
+    min-height: 36px;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.info-left { flex: 1; }
+.info-center { flex: 0 0 auto; text-align: center; }
+.info-right { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+
+.timer-icon {
+    font-size: 1rem;
+}
+
 
 #difficulty-label {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--num-user);
-    padding: 4px 12px;
+    padding: 4px 10px;
     border-radius: 12px;
     background: var(--btn-active);
+    white-space: nowrap;
 }
 
 #timer-display {
@@ -236,7 +260,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px;
+    padding: 14px 8px;
     overflow: hidden;
     position: relative;
 }
@@ -252,7 +276,9 @@ body {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 4px 12px;
+    padding: 4px 8px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .action-btn {
@@ -296,10 +322,12 @@ body {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
     gap: 4px;
-    padding: 6px 12px max(6px, env(safe-area-inset-bottom)) 12px;
+    padding: 6px 8px max(6px, env(safe-area-inset-bottom)) 8px;
     background: var(--numpad-bg);
     box-shadow: var(--numpad-shadow);
     z-index: 10;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .num-btn {
@@ -333,6 +361,46 @@ body {
 }
 #dialog-overlay.active {
     display: flex;
+}
+
+/* ── Pause Overlay ── */
+#pause-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: var(--dialog-overlay);
+    z-index: 15;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+#pause-overlay.active {
+    display: flex;
+}
+.pause-panel {
+    background: var(--dialog-bg);
+    color: var(--dialog-text);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    animation: dialogIn 0.2s ease;
+    min-width: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+.pause-panel h2 {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+.pause-btn-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    width: 100%;
 }
 
 .dialog {
@@ -491,10 +559,12 @@ body {
 
 /* Responsive */
 @media (min-width: 600px) {
-    #board-container { padding: 16px; }
+    #board-container { padding: 24px 16px; }
+    #top-nav { padding: 6px 16px; }
+    #info-bar { padding: 4px 16px; }
     #numpad {
         gap: 6px;
-        padding: 8px 24px max(8px, env(safe-area-inset-bottom)) 24px;
+        padding: 8px 16px max(8px, env(safe-area-inset-bottom)) 16px;
         max-width: 500px;
         margin: 0 auto;
         border-radius: 16px 16px 0 0;
@@ -567,16 +637,9 @@ body {
 }
 
 
-#hearts-bar {
-    display: flex;
-    justify-content: center;
-    padding: 4px 12px;
-    background: var(--toolbar-bg);
-    gap: 2px;
-}
 #hearts-display {
-    font-size: 1.3rem;
-    letter-spacing: 2px;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
 }
 .heart-lost { opacity: 0.25; }
 .num-btn.impossible {
@@ -694,19 +757,43 @@ body {
     </div>
 </div>
 
-<div id="toolbar-top" style="display:none">
-    <button class="tool-btn" id="btn-new-game" title="新游戏">＋</button>
-    <span id="difficulty-label">中等</span>
-    <span id="timer-display">00:00</span>
-    <button class="tool-btn" id="btn-pause" title="暂停">⏸</button>
-    <button class="tool-btn" id="btn-settings" title="设置">⚙</button>
+<div id="top-nav" style="display:none">
+    <div class="nav-left">
+        <button class="tool-btn" id="btn-home" title="主页">⌂</button>
+        <button class="tool-btn" id="btn-new-game" title="新游戏">＋</button>
+    </div>
+    <div class="nav-right">
+        <button class="tool-btn" id="btn-settings" title="设置">⚙</button>
+    </div>
 </div>
 
-<div id="hearts-bar" style="display:none">
-    <span id="hearts-display"></span>
+<div id="info-bar" style="display:none">
+    <div class="info-left">
+        <span id="difficulty-label">中等</span>
+    </div>
+    <div class="info-center">
+        <span id="hearts-display"></span>
+    </div>
+    <div class="info-right">
+        <span class="timer-icon">⏲</span>
+        <span id="timer-display">00:00</span>
+        <button class="tool-btn" id="btn-pause" title="暂停">⏸</button>
+    </div>
 </div>
 
 <div id="board-container" style="display:none">
+    <div id="pause-overlay">
+        <div class="pause-panel">
+            <h2>暂停</h2>
+            <div class="pause-btn-row">
+                <button class="dialog-btn primary" id="btn-resume">继续游戏</button>
+            </div>
+            <div class="pause-btn-row">
+                <button class="dialog-btn secondary" id="btn-restart">重新开始</button>
+                <button class="dialog-btn secondary" id="btn-new-from-pause">新游戏</button>
+            </div>
+        </div>
+    </div>
     <canvas id="board-canvas"></canvas>
     <div id="smart-hint" style="display:none">
         <div class="smart-hint-text" id="smart-hint-reason"></div>
@@ -1614,6 +1701,7 @@ class Renderer {
     _drawGrid(ctx) {
         const cs = this.cellSize;
         const size = cs * 9;
+        const half = 1.25; // half of 2.5px thick line to keep it in-canvas
 
         // Thin lines
         ctx.strokeStyle = getComputedStyle(document.documentElement)
@@ -1631,19 +1719,21 @@ class Renderer {
             ctx.stroke();
         }
 
-        // Thick lines for 3x3 boxes
+        // Thick lines for 3×3 boxes — inset outer edges so full stroke is visible
         ctx.strokeStyle = getComputedStyle(document.documentElement)
             .getPropertyValue('--grid-thick').trim() || '#616161';
         ctx.lineWidth = 2.5;
         for (let i = 0; i <= 9; i += 3) {
+            const x = i === 0 ? half : i === 9 ? size - half : i * cs;
             ctx.beginPath();
-            ctx.moveTo(i * cs, 0);
-            ctx.lineTo(i * cs, size);
+            ctx.moveTo(x, half);
+            ctx.lineTo(x, size - half);
             ctx.stroke();
 
+            const y = i === 0 ? half : i === 9 ? size - half : i * cs;
             ctx.beginPath();
-            ctx.moveTo(0, i * cs);
-            ctx.lineTo(size, i * cs);
+            ctx.moveTo(half, y);
+            ctx.lineTo(size - half, y);
             ctx.stroke();
         }
     }
@@ -1942,6 +2032,7 @@ class InputHandler {
     }
 
     _setupToolbar() {
+        document.getElementById('btn-home')?.addEventListener('click', () => this.game.goHome());
         document.getElementById('btn-undo')?.addEventListener('click', () => this.game.undo());
         document.getElementById('btn-note')?.addEventListener('click', () => this.game.toggleNoteMode());
         document.getElementById('btn-autonote')?.addEventListener('click', () => this.game.autoNote());
@@ -1959,12 +2050,9 @@ class InputHandler {
         document.getElementById('dialog-overlay')?.addEventListener('click', (e) => {
             if (e.target !== e.currentTarget) return;
             const diffActive = document.getElementById('dialog-difficulty').classList.contains('active');
-            const pauseActive = document.getElementById('dialog-pause').classList.contains('active');
             if (diffActive) {
                 document.getElementById('dialog-difficulty').classList.remove('active');
                 document.getElementById('dialog-overlay').classList.remove('active');
-            } else if (pauseActive) {
-                this.game.resume();
             } else {
                 this.game.dialogs.hide();
             }
@@ -2064,7 +2152,7 @@ class InputHandler {
 
     _setupKeyboard() {
         document.addEventListener('keydown', (e) => {
-            if (document.querySelector('.dialog.active')) return;
+            if (document.querySelector('.dialog.active') || document.getElementById('pause-overlay').classList.contains('active')) return;
             if (!this.game.gameStarted) return;
 
             const key = e.key;
@@ -2431,8 +2519,8 @@ class SudokuGame {
     }
 
     _showStartScreen() {
-        document.getElementById('toolbar-top').style.display = 'none';
-        document.getElementById('hearts-bar').style.display = 'none';
+        document.getElementById('top-nav').style.display = 'none';
+        document.getElementById('info-bar').style.display = 'none';
         document.getElementById('toolbar-actions').style.display = 'none';
         document.getElementById('numpad').style.display = 'none';
         document.getElementById('board-container').style.display = 'none';
@@ -2441,13 +2529,24 @@ class SudokuGame {
         document.querySelector('.start-content:not(#level-screen)').style.display = 'block';
     }
 
+    goHome() {
+        if (this.gameStarted) {
+            this.timer.pause();
+            this.gameStarted = false;
+            Storage.clearGame();
+        }
+        this.dialogs.hide();
+        this._showStartScreen();
+    }
+
     _hideStartScreen() {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('board-container').style.display = 'flex';
-        document.getElementById('toolbar-top').style.display = 'flex';
-        document.getElementById('hearts-bar').style.display = 'flex';
+        document.getElementById('top-nav').style.display = 'flex';
+        document.getElementById('info-bar').style.display = 'flex';
         document.getElementById('toolbar-actions').style.display = 'flex';
         document.getElementById('numpad').style.display = 'grid';
+        document.getElementById('pause-overlay').classList.remove('active');
     }
 
     _initLang() {
@@ -2950,14 +3049,16 @@ class SudokuGame {
         if (this.completed || !this.gameStarted) return;
         this.paused = true;
         this.timer.pause();
-        this.dialogs.showPause();
+        document.getElementById('pause-overlay').classList.add('active');
         this.sound.play('btn_click');
     }
 
     resume() {
         this.paused = false;
         this.timer.start();
-        this.dialogs.hide();
+        document.getElementById('pause-overlay').classList.remove('active');
+        document.getElementById('dialog-overlay').classList.remove('active');
+        document.querySelectorAll('.dialog').forEach(d => d.classList.remove('active'));
     }
 
     toggleMute() {
@@ -3052,7 +3153,9 @@ class SudokuGame {
                 if (btn) btn.classList.add('note-highlight');
             }
         }
-        if (this.board.isEmpty(r, c)) {
+        // 空格或填错的格子都可以触发末位候选
+        // isEmpty cells return isCorrect=true, so check isEmpty explicitly
+        if (!this.board.isGiven(r, c) && (this.board.isEmpty(r, c) || !this.board.isCorrect(r, c))) {
             this._checkLastCandidate(r, c);
         }
     }
@@ -3289,12 +3392,23 @@ class SudokuGame {
         const container = document.getElementById('board-container');
         if (!container) return;
         const rect = container.getBoundingClientRect();
+        if (rect.width === 0) return; // container hidden (init)
         const availHeight = window.innerHeight;
-        // Estimate non-board space: toolbar (~48px) + actions (~52px) + numpad (~58px) + padding
         const nonBoardHeight = 180;
         const availBoardHeight = Math.max(availHeight - nonBoardHeight, 200);
-        const size = Math.min(rect.width - 16, availBoardHeight);
+        const cs = getComputedStyle(container);
+        const padX = (parseInt(cs.paddingLeft) || 0) + (parseInt(cs.paddingRight) || 0);
+        const size = Math.min(rect.width - padX, availBoardHeight);
         this.renderer.resize(size, size);
+
+        // Match bar widths to canvas exactly so they don't extend past the board
+        const bars = document.querySelectorAll('#top-nav, #info-bar, #toolbar-actions, #numpad');
+        bars.forEach(el => {
+            el.style.maxWidth = size + 'px';
+            el.style.marginLeft = 'auto';
+            el.style.marginRight = 'auto';
+        });
+
         if (this.gameStarted) {
             this._render();
         }
