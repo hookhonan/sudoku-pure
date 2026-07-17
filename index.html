@@ -591,6 +591,83 @@ body {
     margin: 8px 0;
 }
 
+
+.level-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.level-back {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    background: var(--diff-btn-bg);
+    margin-bottom: 16px;
+    cursor: pointer;
+}
+.level-back:hover { background: var(--btn-hover); }
+.level-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.level-btn {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: 2px solid var(--grid-line);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.level-btn:hover {
+    border-color: var(--num-user);
+    background: var(--highlight-related);
+}
+.level-btn.completed {
+    background: var(--highlight-same-num);
+    border-color: #4caf50;
+}
+.level-btn.current {
+    border-color: var(--num-user);
+    background: var(--highlight-related);
+    animation: pulseBorder 1.5s infinite;
+}
+.level-btn.locked {
+    opacity: 0.35;
+    pointer-events: none;
+    color: var(--btn-disabled);
+}
+@keyframes pulseBorder {
+    0%, 100% { border-color: var(--num-user); }
+    50% { border-color: var(--num-hint); }
+}
+.level-btn .star {
+    font-size: 0.55rem;
+    display: block;
+}
+.start-random-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--num-user);
+    background: var(--highlight-related);
+    border: 2px dashed var(--num-user);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.start-random-btn:hover { background: var(--highlight-selected); }
+
 </style>
 </head>
 <body>
@@ -600,12 +677,20 @@ body {
         <h1 class="start-title">数独</h1>
         <p class="start-subtitle">Sudoku Pure</p>
         <div class="start-diff-grid">
-            <button class="start-diff-btn" data-difficulty="easy"><span class="diff-name">简单</span><span class="diff-desc">Easy</span></button>
-            <button class="start-diff-btn" data-difficulty="medium"><span class="diff-name">中等</span><span class="diff-desc">Medium</span></button>
-            <button class="start-diff-btn" data-difficulty="hard"><span class="diff-name">困难</span><span class="diff-desc">Hard</span></button>
-            <button class="start-diff-btn" data-difficulty="expert"><span class="diff-name">专家</span><span class="diff-desc">Expert</span></button>
+            <button class="start-diff-btn" data-difficulty="easy"><span class="diff-name">简单</span><span class="diff-desc">30关</span></button>
+            <button class="start-diff-btn" data-difficulty="medium"><span class="diff-name">中等</span><span class="diff-desc">30关</span></button>
+            <button class="start-diff-btn" data-difficulty="hard"><span class="diff-name">困难</span><span class="diff-desc">30关</span></button>
+            <button class="start-diff-btn" data-difficulty="expert"><span class="diff-name">专家</span><span class="diff-desc">30关</span></button>
         </div>
         <button class="start-continue" id="btn-continue" style="display:none">继续上一局</button>
+    </div>
+
+    <!-- Level selection screen -->
+    <div id="level-screen" class="start-content" style="display:none">
+        <h2 id="level-title" class="level-title">选择关卡</h2>
+        <button class="level-back" id="btn-level-back">← 返回</button>
+        <div id="level-grid" class="level-grid"></div>
+        <button class="start-random-btn" id="btn-random">🎲 随机挑战</button>
     </div>
 </div>
 
@@ -904,6 +989,15 @@ class Solver {
 }
 
 
+// === seeded RNG ===
+class SeededRNG {
+    constructor(seed) { this.s = this._hash(seed); }
+    _hash(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h) || 1; }
+    next() { this.s = (this.s * 1664525 + 1013904223) | 0; return (this.s >>> 0) / 4294967296; }
+    shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(this.next() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+    randomInt(min, max) { return Math.floor(this.next() * (max - min + 1)) + min; }
+}
+
 // === js/core/generator.js ===
 // import removed
 // import removed
@@ -978,6 +1072,51 @@ class Generator {
 
     static _randomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    static generateSeeded(difficulty, seed) {
+        const rng = new SeededRNG(difficulty + '_' + seed);
+        const config = this.DIFFICULTY[difficulty];
+        const targetGiven = rng.randomInt(config.givenMin, config.givenMax);
+
+        const solution = this._generateSeededSolution(rng);
+        const puzzle = this._createSeededPuzzle(solution, 81 - targetGiven, rng);
+
+        return { puzzle, solution, difficulty };
+    }
+
+    static _generateSeededSolution(rng) {
+        const grid = Array.from({ length: 9 }, () => Array(9).fill(0));
+        for (let box = 0; box < 9; box += 4) {
+            const nums = rng.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+            const br = Math.floor(box / 3) * 3;
+            const bc = (box % 3) * 3;
+            let idx = 0;
+            for (let r = br; r < br + 3; r++)
+                for (let c = bc; c < bc + 3; c++)
+                    grid[r][c] = nums[idx++];
+        }
+        Solver.solve(grid);
+        return grid;
+    }
+
+    static _createSeededPuzzle(solution, holes, rng) {
+        const puzzle = solution.map(row => [...row]);
+        const positions = rng.shuffle(
+            Array.from({ length: 81 }, (_, i) => [Math.floor(i / 9), i % 9])
+        );
+        let removed = 0;
+        for (const [r, c] of positions) {
+            if (removed >= holes) break;
+            const backup = puzzle[r][c];
+            puzzle[r][c] = 0;
+            if (Solver.hasUniqueSolution(puzzle)) {
+                removed++;
+            } else {
+                puzzle[r][c] = backup;
+            }
+        }
+        return puzzle;
     }
 }
 
@@ -1236,6 +1375,77 @@ class Timer {
     }
 }
 
+
+// === level manager ===
+class LevelManager {
+    static LEVELS_PER_DIFFICULTY = 30;
+    static DIFF_ORDER = ['easy', 'medium', 'hard', 'expert'];
+
+    constructor() {
+        this.progress = {}; // { 'easy_5': { completed: true, bestTime: 120, stars: 3 } }
+        this.load();
+    }
+
+    load() {
+        try {
+            const d = JSON.parse(localStorage.getItem('sudoku_levels'));
+            if (d) this.progress = d;
+        } catch (e) {}
+    }
+
+    save() {
+        try {
+            localStorage.setItem('sudoku_levels', JSON.stringify(this.progress));
+        } catch (e) {}
+    }
+
+    isCompleted(difficulty, level) {
+        const key = difficulty + '_' + level;
+        return !!(this.progress[key] && this.progress[key].completed);
+    }
+
+    completeLevel(difficulty, level, timeSeconds) {
+        const key = difficulty + '_' + level;
+        const old = this.progress[key] || {};
+        const bestTime = old.bestTime ? Math.min(old.bestTime, timeSeconds) : timeSeconds;
+        let stars = 1;
+        if (timeSeconds < 300) stars = 3;
+        else if (timeSeconds < 600) stars = 2;
+        this.progress[key] = { completed: true, bestTime, stars, lastTime: timeSeconds };
+        this.save();
+        return { bestTime, stars, isNewBest: !old.bestTime || timeSeconds < old.bestTime };
+    }
+
+    getBestTime(difficulty, level) {
+        const key = difficulty + '_' + level;
+        return this.progress[key] ? this.progress[key].bestTime : null;
+    }
+
+    getStars(difficulty, level) {
+        const key = difficulty + '_' + level;
+        return this.progress[key] ? this.progress[key].stars : 0;
+    }
+
+    getCurrentLevel(difficulty) {
+        for (let i = 1; i <= this.LEVELS_PER_DIFFICULTY; i++) {
+            if (!this.isCompleted(difficulty, i)) return i;
+        }
+        return this.LEVELS_PER_DIFFICULTY; // all completed
+    }
+
+    isUnlocked(difficulty, level) {
+        if (level === 1) return true;
+        return this.isCompleted(difficulty, level - 1);
+    }
+
+    getProgressSummary(difficulty) {
+        let completed = 0;
+        for (let i = 1; i <= this.LEVELS_PER_DIFFICULTY; i++) {
+            if (this.isCompleted(difficulty, i)) completed++;
+        }
+        return completed;
+    }
+}
 
 // === js/game/hints.js ===
 class Hints {
@@ -1675,12 +1885,23 @@ class InputHandler {
     }
 
     _setupStartScreen() {
-        // Difficulty buttons on start screen
+        // Difficulty buttons -> show level screen
         document.querySelectorAll('.start-diff-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const diff = btn.dataset.difficulty;
-                this.game.startGame(diff);
+                this.game._showLevelScreen(diff);
             });
+        });
+
+        // Level back button
+        document.getElementById('btn-level-back')?.addEventListener('click', () => {
+            document.getElementById('level-screen').style.display = 'none';
+            document.querySelector('.start-content:not(#level-screen)').style.display = 'block';
+        });
+
+        // Random mode button
+        document.getElementById('btn-random')?.addEventListener('click', () => {
+            this.game.startGame(this.game.difficulty, 'random');
         });
 
         // Continue button
@@ -1754,7 +1975,7 @@ class InputHandler {
             btn.addEventListener('click', () => {
                 const diff = btn.dataset.difficulty;
                 this.game.dialogs.hide();
-                this.game.startGame(diff);
+                this.game.startGame(diff, 'random');
             });
         });
 
@@ -1762,19 +1983,25 @@ class InputHandler {
         document.getElementById('btn-resume')?.addEventListener('click', () => this.game.resume());
         document.getElementById('btn-gameover-retry')?.addEventListener('click', () => {
             this.game.dialogs.hide();
-            this.game.startGame(this.game.difficulty);
+            if (this.game.gameMode === 'level') {
+                this.game.restartGame();
+            } else {
+                this.game.startGame(this.game.difficulty, 'random');
+            }
         });
         document.getElementById('btn-gameover-home')?.addEventListener('click', () => {
             this.game.dialogs.hide();
             Storage.clearGame();
             this.game.gameStarted = false;
+            this.game.currentLevel = 1;
+            this.game.gameMode = 'random';
             this.game._showStartScreen();
         });
         document.getElementById('btn-restart')?.addEventListener('click', () => {
             this.game.dialogs.hide();
             this.game.dialogs.showConfirm(
-                '重新开始', '确定要重新开始当前难度吗？', () => {
-                this.game.startGame(this.game.difficulty);
+                '重新开始', '确定要重新开始吗？进度将丢失。', () => {
+                this.game.restartGame();
             });
         });
         document.getElementById('btn-new-from-pause')?.addEventListener('click', () => {
@@ -1823,12 +2050,15 @@ class InputHandler {
         // Victory actions
         document.getElementById('btn-victory-new')?.addEventListener('click', () => {
             this.game.dialogs.hide();
-            document.getElementById('dialog-difficulty').classList.add('active');
-            document.getElementById('dialog-overlay').classList.add('active');
+            this.game._showStartScreen();
         });
         document.getElementById('btn-victory-replay')?.addEventListener('click', () => {
             this.game.dialogs.hide();
-            this.game.startGame(this.game.difficulty);
+            if (this.game.gameMode === 'level') {
+                this.game.restartGame();
+            } else {
+                this.game.startGame(this.game.difficulty, 'random');
+            }
         });
     }
 
@@ -2118,6 +2348,9 @@ class SudokuGame {
         this.lives = 3;
         this.maxLives = 3;
         this.disableImpossible = false;
+        this.levelManager = new LevelManager();
+        this.gameMode = 'random'; // 'level' or 'random'
+        this.currentLevel = 1;
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
@@ -2155,6 +2388,48 @@ class SudokuGame {
         this._showStartScreen();
     }
 
+    _showLevelScreen(difficulty) {
+        this.difficulty = difficulty;
+        document.querySelector('.start-content:not(#level-screen)').style.display = 'none';
+        const ls = document.getElementById('level-screen');
+        ls.style.display = 'block';
+        document.getElementById('level-title').textContent =
+            Generator.DIFFICULTY[difficulty].label + ' - 选择关卡';
+
+        const grid = document.getElementById('level-grid');
+        grid.innerHTML = '';
+        const total = LevelManager.LEVELS_PER_DIFFICULTY;
+        const current = this.levelManager.getCurrentLevel(difficulty);
+
+        for (let i = 1; i <= total; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'level-btn';
+            const stars = this.levelManager.getStars(difficulty, i);
+            const unlocked = this.levelManager.isUnlocked(difficulty, i);
+            const completed = this.levelManager.isCompleted(difficulty, i);
+
+            if (completed) {
+                btn.classList.add('completed');
+                btn.innerHTML = i + '<span class="star">' + '★'.repeat(stars) + '</span>';
+            } else if (i === current && unlocked) {
+                btn.classList.add('current');
+                btn.textContent = i;
+            } else if (!unlocked) {
+                btn.classList.add('locked');
+                btn.textContent = '🔒';
+            } else {
+                btn.textContent = i;
+            }
+
+            if (unlocked) {
+                btn.addEventListener('click', () => {
+                    this.startGame(difficulty, 'level', i);
+                });
+            }
+            grid.appendChild(btn);
+        }
+    }
+
     _showStartScreen() {
         document.getElementById('toolbar-top').style.display = 'none';
         document.getElementById('hearts-bar').style.display = 'none';
@@ -2162,6 +2437,8 @@ class SudokuGame {
         document.getElementById('numpad').style.display = 'none';
         document.getElementById('board-container').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
+        document.getElementById('level-screen').style.display = 'none';
+        document.querySelector('.start-content:not(#level-screen)').style.display = 'block';
     }
 
     _hideStartScreen() {
@@ -2269,9 +2546,21 @@ class SudokuGame {
         this._render();
     }
 
-    startGame(difficulty) {
+    startGame(difficulty, mode, level) {
         this.difficulty = difficulty;
-        const { puzzle, solution } = Generator.generate(difficulty);
+        this.gameMode = mode || 'random';
+        this.currentLevel = level || 1;
+
+        let puzzle, solution;
+        if (this.gameMode === 'level') {
+            const result = Generator.generateSeeded(difficulty, 'L' + this.currentLevel);
+            puzzle = result.puzzle;
+            solution = result.solution;
+        } else {
+            const result = Generator.generate(difficulty);
+            puzzle = result.puzzle;
+            solution = result.solution;
+        }
 
         this.board.reset();
         this.board.load(puzzle, solution);
@@ -2323,6 +2612,8 @@ class SudokuGame {
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
         this.lives = saved.lives ?? this.maxLives;
         this.maxLives = saved.maxLives ?? 3;
+        this.gameMode = saved.gameMode || 'random';
+        this.currentLevel = saved.currentLevel || 1;
 
         if (saved.historyStack) {
             this.history.stack = saved.historyStack;
@@ -2701,6 +2992,37 @@ class SudokuGame {
         this._save();
     }
 
+    restartGame() {
+        // Restart the SAME puzzle from initial state
+        this.history.reset();
+        this.timer.reset();
+        this.timer.start();
+        this.hints.reset();
+        this.gameStarted = true;
+        this.noteMode = false;
+        this.paused = false;
+        this.completed = false;
+        this.hintCell = null;
+        this.sameNumHighlight = null;
+        this._pendingHint = null;
+        this.lives = this.maxLives;
+        // Reset grid to initial puzzle (only given cells)
+        for (let r = 0; r < 9; r++)
+            for (let c = 0; c < 9; c++)
+                if (!this.board.given[r][c]) {
+                    this.board.grid[r][c] = 0;
+                    this.board.notes[r][c].clear();
+                }
+        this.selectCell(-1, -1);
+        this._updateHeartsDisplay();
+        this._updateToolbarState();
+        this._updateNumPadHighlight();
+        this._resize();
+        this._render();
+        this._save();
+        this.sound.play('chouka');
+    }
+
     _gameOver() {
         this.completed = true;
         this.timer.pause();
@@ -2878,6 +3200,11 @@ class SudokuGame {
 
             this.stats.recordGame(this.difficulty, true, timeSec);
 
+            // Record level completion
+            if (this.gameMode === 'level') {
+                const result = this.levelManager.completeLevel(this.difficulty, this.currentLevel, timeSec);
+            }
+
             setTimeout(() => {
                 this.sound.play('over_success');
                 this.dialogs.showVictory(timeStr, diffLabel, isNewBest);
@@ -2890,7 +3217,10 @@ class SudokuGame {
     }
 
     _updateDifficultyLabel() {
-        const label = Generator.DIFFICULTY[this.difficulty].label;
+        let label = Generator.DIFFICULTY[this.difficulty].label;
+        if (this.gameMode === 'level') {
+            label += ' #' + this.currentLevel;
+        }
         document.getElementById('difficulty-label').textContent = label;
     }
 
@@ -2949,6 +3279,8 @@ class SudokuGame {
             historyStack: this.history.stack,
             historyPointer: this.history.pointer,
             gameStarted: true,
+            gameMode: this.gameMode,
+            currentLevel: this.currentLevel,
             hintRemaining: this.hints.remaining,
             autoNoteUsed: this.hints.autoNoteUsed,
             lives: this.lives,
