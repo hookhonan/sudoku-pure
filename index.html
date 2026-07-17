@@ -803,13 +803,9 @@ body {
     <div id="pause-overlay">
         <div class="pause-panel">
             <h2>暂停</h2>
-            <div class="pause-btn-row">
-                <button class="dialog-btn primary" id="btn-resume">继续游戏</button>
-            </div>
-            <div class="pause-btn-row">
-                <button class="dialog-btn secondary" id="btn-restart">重新开始</button>
-                <button class="dialog-btn secondary" id="btn-new-from-pause">新游戏</button>
-            </div>
+            <div class="pause-btn-row"><button class="dialog-btn primary" id="btn-resume">继续游戏</button></div>
+            <div class="pause-btn-row"><button class="dialog-btn secondary" id="btn-restart">重新开始</button></div>
+            <div class="pause-btn-row"><button class="dialog-btn secondary" id="btn-new-from-pause">新游戏</button></div>
         </div>
     </div>
     <canvas id="board-canvas"></canvas>
@@ -3473,8 +3469,8 @@ class SudokuGame {
         const size = Math.min(rect.width - padX, rect.height - padY);
         this.renderer.resize(size, size);
 
-        // Top bars: tiny overhang so they don't look narrower than board
-        const topBarW = size + 4;
+        // Top bars: overhang so controls sit near board edges
+        const topBarW = size + 28;
         document.querySelectorAll('#top-nav, #info-bar, #toolbar-actions').forEach(el => {
             el.style.maxWidth = topBarW + 'px';
             el.style.marginLeft = 'auto';
