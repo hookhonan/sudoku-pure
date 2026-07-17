@@ -184,7 +184,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1px 8px;
+    padding: 1px 6px;
     background: var(--bg-primary);
     z-index: 10;
     min-height: 28px;
@@ -203,7 +203,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1px 8px;
+    padding: 1px 6px;
     background: var(--bg-primary);
     z-index: 10;
     min-height: 26px;
@@ -261,7 +261,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 8px 4px 8px;
+    padding: 0 8px 4px 8px;
     overflow: hidden;
     position: relative;
 }
@@ -322,7 +322,7 @@ body {
 #numpad {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    gap: 3px;
+    gap: 4px;
     padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
     background: transparent;
     box-shadow: none;
@@ -336,8 +336,8 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    height: 58px;
+    gap: 4px;
+    height: 56px;
     border-radius: 8px;
     border: 1.5px solid var(--grid-line);
     color: var(--text-primary);
@@ -352,16 +352,20 @@ body {
 }
 .num-btn .num-main {
     font-family: "Segoe UI", system-ui, sans-serif;
-    font-size: 1.3rem;
+    font-size: 1.25rem;
     font-weight: 700;
     line-height: 1;
 }
 .num-btn .num-remain {
     font-family: "Segoe UI", system-ui, sans-serif;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     font-weight: 400;
     color: var(--text-secondary);
     line-height: 1;
+}
+.num-btn.filled {
+    opacity: 0.25;
+    pointer-events: none;
 }
 
 /* ── Dialogs ── */
@@ -574,9 +578,9 @@ body {
 
 /* Responsive */
 @media (min-width: 600px) {
-    #board-container { padding: 6px 16px 10px 16px; }
-    #top-nav { padding: 2px 16px; }
-    #info-bar { padding: 1px 16px; }
+    #board-container { padding: 0 16px 10px 16px; }
+    #top-nav { padding: 2px 14px; }
+    #info-bar { padding: 1px 14px; }
     #numpad {
         gap: 4px;
         padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
@@ -2803,6 +2807,8 @@ class SudokuGame {
     inputNumber(num) {
         if (this.paused || this.completed) return;
         if (this.selectedRow === null || this.selectedCol === null) return;
+        // Number already fully placed — cannot select
+        if (document.getElementById('num-' + num).classList.contains('filled')) return;
 
         const r = this.selectedRow;
         const c = this.selectedCol;
@@ -3196,8 +3202,14 @@ class SudokuGame {
                 if (v !== 0 && this.board.isCorrect(r, c)) counts[v]++;
             }
         for (let n = 1; n <= 9; n++) {
+            const remain = 9 - counts[n];
             const el = document.querySelector('#num-' + n + ' .num-remain');
-            if (el) el.textContent = 9 - counts[n];
+            if (el) el.textContent = remain;
+            const btn = document.getElementById('num-' + n);
+            if (btn) {
+                if (remain <= 0) btn.classList.add('filled');
+                else btn.classList.remove('filled');
+            }
         }
     }
 
@@ -3463,14 +3475,20 @@ class SudokuGame {
         const size = Math.min(rect.width - padX, rect.height - padY);
         this.renderer.resize(size, size);
 
-        // Match bar widths to canvas with a tiny overhang so bars don't look narrower than board
-        const barW = size + 6;
-        const bars = document.querySelectorAll('#top-nav, #info-bar, #toolbar-actions, #numpad');
-        bars.forEach(el => {
-            el.style.maxWidth = barW + 'px';
+        // Top bars: tiny overhang so they don't look narrower than board
+        const topBarW = size + 4;
+        document.querySelectorAll('#top-nav, #info-bar, #toolbar-actions').forEach(el => {
+            el.style.maxWidth = topBarW + 'px';
             el.style.marginLeft = 'auto';
             el.style.marginRight = 'auto';
         });
+        // Numpad: exact board alignment (columns line up)
+        const numpad = document.getElementById('numpad');
+        if (numpad) {
+            numpad.style.maxWidth = size + 'px';
+            numpad.style.marginLeft = 'auto';
+            numpad.style.marginRight = 'auto';
+        }
 
         if (this.gameStarted) {
             this._render();
