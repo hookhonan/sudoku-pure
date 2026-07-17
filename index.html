@@ -2199,42 +2199,43 @@ class SudokuGame {
 
     _applyMaxLives(newMax) {
         const oldMax = this.maxLives;
-        this.maxLives = newMax;
-        try { localStorage.setItem('sudoku_maxLives', newMax); } catch (e) {}
+        const errors = oldMax - this.lives; // mistakes already made
 
         if (!this.gameStarted) {
+            this.maxLives = newMax;
             this.lives = newMax;
+            try { localStorage.setItem('sudoku_maxLives', newMax); } catch (e) {}
             this._updateHeartsDisplay();
             return;
         }
 
-        if (newMax > oldMax) {
-            // Increasing: add the difference
-            this.lives = Math.min(this.lives + (newMax - oldMax), newMax);
-            this._updateHeartsDisplay();
-        } else if (newMax < oldMax && this.lives > newMax) {
-            // Decreasing below current lives: confirm with user
-            const saveLives = this.lives;
+        if (newMax <= errors) {
+            // New max would not cover existing errors: game over
+            const resetCancel = () => {
+                document.getElementById('confirm-cancel').onclick = null;
+            };
             this.dialogs.showConfirm(
                 '确认修改红心数',
-                '当前有' + saveLives + '颗红心，改为最大' + newMax + '颗将立即结束游戏。确定修改吗？',
+                '已错误' + errors + '次，改为最大' + newMax + '颗心将立即结束游戏。确定修改吗？',
                 () => {
+                    this.maxLives = newMax;
+                    try { localStorage.setItem('sudoku_maxLives', newMax); } catch (e) {}
                     this.lives = 0;
                     this._updateHeartsDisplay();
+                    resetCancel();
                     this._gameOver();
                 }
             );
-            // Reset max back if user cancels
-            const origCancel = document.getElementById('confirm-cancel').onclick;
             document.getElementById('confirm-cancel').onclick = () => {
-                this.maxLives = oldMax;
                 document.getElementById('setting-hearts').value = oldMax;
-                try { localStorage.setItem('sudoku_maxLives', oldMax); } catch (e) {}
+                resetCancel();
                 this.dialogs.hide();
             };
         } else {
-            // Decreasing but lives <= newMax: just cap it
-            this.lives = Math.min(this.lives, newMax);
+            // newMax > errors: can safely apply
+            this.maxLives = newMax;
+            this.lives = newMax - errors;
+            try { localStorage.setItem('sudoku_maxLives', newMax); } catch (e) {}
             this._updateHeartsDisplay();
         }
     }
@@ -2745,33 +2746,45 @@ class SudokuGame {
     }
 
     _checkLastCandidate(row, col) {
-        // Simple highlight only - no tooltip
-        let rowMissing = 0, rowEmpty = 0;
-        const rowUsed = new Set();
+        // First check for errors in row/col/box - skip if any errors exist
+        let rowEmpty = 0, rowHasDup = false;
+        const rowSeen = new Set();
         for (let i = 0; i < 9; i++) {
-            if (this.board.grid[row][i] === 0) rowEmpty++;
-            else rowUsed.add(this.board.grid[row][i]);
+            const v = this.board.grid[row][i];
+            if (v === 0) rowEmpty++;
+            else if (rowSeen.has(v)) rowHasDup = true;
+            else rowSeen.add(v);
         }
-        if (rowEmpty === 1) for (let n = 1; n <= 9; n++) if (!rowUsed.has(n)) rowMissing = n;
 
-        let colMissing = 0, colEmpty = 0;
-        const colUsed = new Set();
+        let colEmpty = 0, colHasDup = false;
+        const colSeen = new Set();
         for (let i = 0; i < 9; i++) {
-            if (this.board.grid[i][col] === 0) colEmpty++;
-            else colUsed.add(this.board.grid[i][col]);
+            const v = this.board.grid[i][col];
+            if (v === 0) colEmpty++;
+            else if (colSeen.has(v)) colHasDup = true;
+            else colSeen.add(v);
         }
-        if (colEmpty === 1) for (let n = 1; n <= 9; n++) if (!colUsed.has(n)) colMissing = n;
 
-        let boxMissing = 0, boxEmpty = 0;
-        const boxUsed = new Set();
+        let boxEmpty = 0, boxHasDup = false;
+        const boxSeen = new Set();
         const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
         for (let r = br; r < br + 3; r++)
-            for (let c = bc; c < bc + 3; c++)
-                if (this.board.grid[r][c] === 0) boxEmpty++;
-                else boxUsed.add(this.board.grid[r][c]);
-        if (boxEmpty === 1) for (let n = 1; n <= 9; n++) if (!boxUsed.has(n)) boxMissing = n;
+            for (let c = bc; c < bc + 3; c++) {
+                const v = this.board.grid[r][c];
+                if (v === 0) boxEmpty++;
+                else if (boxSeen.has(v)) boxHasDup = true;
+                else boxSeen.add(v);
+            }
 
-        // Highlight the unique candidates AND disable impossible numbers
+        // Don't show last-candidate if any row/col/box has duplicate errors
+        if (rowHasDup || colHasDup || boxHasDup) return;
+
+        // Find missing numbers where only one cell is empty
+        let rowMissing = 0, colMissing = 0, boxMissing = 0;
+        if (rowEmpty === 1) for (let n = 1; n <= 9; n++) if (!rowSeen.has(n)) rowMissing = n;
+        if (colEmpty === 1) for (let n = 1; n <= 9; n++) if (!colSeen.has(n)) colMissing = n;
+        if (boxEmpty === 1) for (let n = 1; n <= 9; n++) if (!boxSeen.has(n)) boxMissing = n;
+
         const uniqueNums = new Set();
         if (rowMissing) uniqueNums.add(rowMissing);
         if (colMissing) uniqueNums.add(colMissing);
