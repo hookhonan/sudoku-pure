@@ -1,0 +1,65 @@
+:root, [data-theme="light"] {
+    --bg-primary: #f5f5f5;
+    --bg-secondary: #ffffff;
+    --bg-board: #ffffff;
+    --text-primary: #1a1a2e;
+    --text-secondary: #616161;
+    --toolbar-bg: #ffffff;
+    --toolbar-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    --numpad-bg: #ffffff;
+    --numpad-shadow: 0 -1px 3px rgba(0,0,0,0.12);
+    --num-given: #1a1a2e;
+    --num-user: #1565c0;
+    --num-error: #d32f2f;
+    --num-hint: #2e7d32;
+    --num-note: #757575;
+    --grid-line: #bdbdbd;
+    --grid-thick: #616161;
+    --highlight-related: #e3f2fd;
+    --highlight-selected: #bbdefb;
+    --highlight-same-num: #c8e6c9;
+    --selection-border: #1976d2;
+    --btn-bg: transparent;
+    --btn-hover: #f0f0f0;
+    --btn-active: #e3f2fd;
+    --btn-active-text: #1565c0;
+    --btn-disabled: #bdbdbd;
+    --dialog-bg: #ffffff;
+    --dialog-text: #1a1a2e;
+    --dialog-overlay: rgba(0,0,0,0.4);
+    --diff-btn-bg: #f5f5f5;
+    --diff-btn-hover: #e3f2fd;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-board: #1e1e1e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #9e9e9e;
+    --toolbar-bg: #1e1e1e;
+    --toolbar-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --numpad-bg: #1e1e1e;
+    --numpad-shadow: 0 -1px 3px rgba(0,0,0,0.4);
+    --num-given: #ffffff;
+    --num-user: #64b5f6;
+    --num-error: #ef5350;
+    --num-hint: #81c784;
+    --num-note: #9e9e9e;
+    --grid-line: #424242;
+    --grid-thick: #757575;
+    --highlight-related: #1a3a4a;
+    --highlight-selected: #0d47a1;
+    --highlight-same-num: #1b3a1b;
+    --selection-border: #42a5f5;
+    --btn-bg: transparent;
+    --btn-hover: #333333;
+    --btn-active: #0d47a1;
+    --btn-active-text: #64b5f6;
+    --btn-disabled: #616161;
+    --dialog-bg: #2c2c2c;
+    --dialog-text: #e0e0e0;
+    --dialog-overlay: rgba(0,0,0,0.6);
+    --diff-btn-bg: #333333;
+    --diff-btn-hover: #0d47a1;
+}
