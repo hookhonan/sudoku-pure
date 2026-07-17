@@ -322,7 +322,8 @@ body {
 #numpad {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    gap: 8px;
+    gap: 0;
+    justify-items: center;
     padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
     background: transparent;
     box-shadow: none;
@@ -337,6 +338,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 4px;
+    width: calc(100% - 12px);
     height: 56px;
     border-radius: 8px;
     border: 1.5px solid var(--grid-line);
@@ -581,10 +583,6 @@ body {
     #board-container { padding: 0 16px 10px 16px; }
     #top-nav { padding: 2px 14px; }
     #info-bar { padding: 1px 14px; }
-    #numpad {
-        gap: 8px;
-        padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
-    }
     .num-btn .num-main { font-size: 1.5rem; }
     #toolbar-actions { gap: 8px; padding: 4px 16px; }
     .action-btn { width: 48px; height: 48px; }
