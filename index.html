@@ -2328,6 +2328,9 @@ class SudokuGame {
         const oldVal = this.board.getCell(r, c);
         const oldNotes = new Set(this.board.getNotes(r, c));
 
+        // Locked: correct answer cannot be changed
+        if (oldVal !== 0 && this.board.isCorrect(r, c)) return;
+
         if (oldVal === num) return;
 
         this.board.setCell(r, c, num);
