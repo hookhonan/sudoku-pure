@@ -34,6 +34,7 @@ button {
 }
 
 :root, [data-theme="light"] {
+    --font-scale: 1.0;
     --bg-primary: #f5f5f5;
     --bg-secondary: #ffffff;
     --bg-board: #ffffff;
@@ -260,7 +261,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 8px;
+    padding: 2px 8px 4px 8px;
     overflow: hidden;
     position: relative;
 }
@@ -321,8 +322,8 @@ body {
 #numpad {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    gap: 2px;
-    padding: 4px 0 max(4px, env(safe-area-inset-bottom)) 0;
+    gap: 3px;
+    padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
     background: transparent;
     box-shadow: none;
     z-index: 10;
@@ -335,17 +336,14 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1px;
-    aspect-ratio: 1;
-    max-height: 56px;
-    border-radius: 6px;
+    gap: 2px;
+    height: 58px;
+    border-radius: 8px;
     border: 1.5px solid var(--grid-line);
-    font-size: 1.25rem;
-    font-weight: 600;
     color: var(--text-primary);
     background: var(--bg-secondary);
     transition: all 0.12s;
-    padding: 2px;
+    padding: 4px 2px;
 }
 .num-btn:hover { background: var(--btn-hover); border-color: var(--num-user); }
 .num-btn:active {
@@ -353,10 +351,14 @@ body {
     transform: scale(0.93);
 }
 .num-btn .num-main {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
     line-height: 1;
 }
 .num-btn .num-remain {
-    font-size: 0.55rem;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 0.6rem;
     font-weight: 400;
     color: var(--text-secondary);
     line-height: 1;
@@ -572,7 +574,7 @@ body {
 
 /* Responsive */
 @media (min-width: 600px) {
-    #board-container { padding: 8px 16px; }
+    #board-container { padding: 6px 16px 10px 16px; }
     #top-nav { padding: 2px 16px; }
     #info-bar { padding: 1px 16px; }
     #numpad {
@@ -891,6 +893,14 @@ body {
         <div class="setting-row">
             <label>数字禁用</label>
             <label class="toggle"><input type="checkbox" id="setting-disable"><span class="slider"></span></label>
+        </div>
+        <div class="setting-row">
+            <label>字体大小</label>
+            <select id="setting-fontsize">
+                <option value="small">小</option>
+                <option value="medium" selected>中</option>
+                <option value="large">大</option>
+            </select>
         </div>
         <div class="setting-row">
             <label>红心数</label>
@@ -1754,6 +1764,8 @@ class Renderer {
 
     _drawNumbers(ctx, board, state) {
         const cs = this.cellSize;
+        const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim()) || 1.0;
+        const family = '"Segoe UI", system-ui, sans-serif';
         for (let r = 0; r < 9; r++) {
             for (let c = 0; c < 9; c++) {
                 const val = board.getCell(r, c);
@@ -1770,19 +1782,19 @@ class Renderer {
                 if (isGiven) {
                     ctx.fillStyle = getComputedStyle(document.documentElement)
                         .getPropertyValue('--num-given').trim() || '#1a1a2e';
-                    ctx.font = `bold ${cs * 0.5}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.font = `bold ${cs * 0.5 * scale}px ${family}`;
                 } else if (isHint) {
                     ctx.fillStyle = getComputedStyle(document.documentElement)
                         .getPropertyValue('--num-hint').trim() || '#1565c0';
-                    ctx.font = `${cs * 0.48}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.font = `${cs * 0.48 * scale}px ${family}`;
                 } else if (isConflict) {
                     ctx.fillStyle = getComputedStyle(document.documentElement)
                         .getPropertyValue('--num-error').trim() || '#d32f2f';
-                    ctx.font = `${cs * 0.48}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.font = `${cs * 0.48 * scale}px ${family}`;
                 } else {
                     ctx.fillStyle = getComputedStyle(document.documentElement)
                         .getPropertyValue('--num-user').trim() || '#1565c0';
-                    ctx.font = `${cs * 0.48}px "Segoe UI", system-ui, sans-serif`;
+                    ctx.font = `${cs * 0.48 * scale}px ${family}`;
                 }
 
                 ctx.fillText(val.toString(), c * cs + cs / 2, r * cs + cs / 2);
@@ -2118,7 +2130,13 @@ class InputHandler {
             document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'light';
             document.getElementById('setting-hearts').value = this.game.maxLives;
             document.getElementById('setting-disable').checked = this.game.disableImpossible;
+            try {
+                document.getElementById('setting-fontsize').value = localStorage.getItem('sudoku_fontSize') || 'medium';
+            } catch (e) {}
             this.game.dialogs.showSettings();
+        });
+        document.getElementById('setting-fontsize')?.addEventListener('change', (e) => {
+            this.game._applyFontSize(e.target.value);
         });
         document.getElementById('btn-close-settings')?.addEventListener('click', () => this.game.dialogs.hide());
         document.getElementById('setting-mute')?.addEventListener('change', (e) => {
@@ -2467,6 +2485,7 @@ class SudokuGame {
         this._loadTheme();
         this._initLang();
         this._loadMaxLives();
+        this._loadFontSize();
 
         this.sound.loadAll();
 
@@ -2585,6 +2604,20 @@ class SudokuGame {
             if (v >= 1 && v <= 5) this.maxLives = v;
             this.disableImpossible = localStorage.getItem('sudoku_disableImpossible') === 'true';
         } catch (e) {}
+    }
+
+    _loadFontSize() {
+        try {
+            const v = localStorage.getItem('sudoku_fontSize') || 'medium';
+            this._applyFontSize(v);
+        } catch (e) {}
+    }
+
+    _applyFontSize(size) {
+        const scale = { small: 0.82, medium: 1.0, large: 1.18 }[size] || 1.0;
+        document.documentElement.style.setProperty('--font-scale', scale);
+        try { localStorage.setItem('sudoku_fontSize', size); } catch (e) {}
+        if (this.gameStarted) this._render();
     }
 
     _applyMaxLives(newMax) {
@@ -3430,10 +3463,11 @@ class SudokuGame {
         const size = Math.min(rect.width - padX, rect.height - padY);
         this.renderer.resize(size, size);
 
-        // Match bar widths to canvas exactly so they don't extend past the board
+        // Match bar widths to canvas with a tiny overhang so bars don't look narrower than board
+        const barW = size + 6;
         const bars = document.querySelectorAll('#top-nav, #info-bar, #toolbar-actions, #numpad');
         bars.forEach(el => {
-            el.style.maxWidth = size + 'px';
+            el.style.maxWidth = barW + 'px';
             el.style.marginLeft = 'auto';
             el.style.marginRight = 'auto';
         });
