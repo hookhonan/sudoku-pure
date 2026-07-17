@@ -1634,7 +1634,7 @@ class Renderer {
 
     resize(containerWidth, containerHeight) {
         const dpr = window.devicePixelRatio || 1;
-        const size = Math.min(containerWidth, containerHeight - 20);
+        const size = Math.min(containerWidth, containerHeight);
         this.boardSize = size;
         this.canvas.style.width = size + 'px';
         this.canvas.style.height = size + 'px';
@@ -3393,12 +3393,11 @@ class SudokuGame {
         if (!container) return;
         const rect = container.getBoundingClientRect();
         if (rect.width === 0) return; // container hidden (init)
-        const availHeight = window.innerHeight;
-        const nonBoardHeight = 180;
-        const availBoardHeight = Math.max(availHeight - nonBoardHeight, 200);
         const cs = getComputedStyle(container);
         const padX = (parseInt(cs.paddingLeft) || 0) + (parseInt(cs.paddingRight) || 0);
-        const size = Math.min(rect.width - padX, availBoardHeight);
+        const padY = (parseInt(cs.paddingTop) || 0) + (parseInt(cs.paddingBottom) || 0);
+        // Use actual container content area, not window.innerHeight estimate
+        const size = Math.min(rect.width - padX, rect.height - padY);
         this.renderer.resize(size, size);
 
         // Match bar widths to canvas exactly so they don't extend past the board
