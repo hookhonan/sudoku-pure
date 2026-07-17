@@ -3058,52 +3058,51 @@ class SudokuGame {
     }
 
     _checkLastCandidate(row, col) {
-        // Count CORRECTLY filled cells in row/col/box
-        let rowCorrect = 0, rowEmpty = 0, rowHasErr = false;
-        const rowSeen = new Set();
+        // Count CORRECT cells in row/col/box
+        let rowCorrect = 0, rowCorrectSet = new Set(), rowWrongCol = -1;
         for (let i = 0; i < 9; i++) {
             const v = this.board.grid[row][i];
-            if (v === 0) { rowEmpty++; }
-            else if (this.board.isCorrect(row, i)) {
+            if (v !== 0 && this.board.isCorrect(row, i)) {
                 rowCorrect++;
-                if (rowSeen.has(v)) rowHasErr = true; else rowSeen.add(v);
-            } else { rowHasErr = true; }
+                rowCorrectSet.add(v);
+            } else if (i !== col) {
+                rowWrongCol = i; // Another cell is wrong/empty -> not 8-correct
+            }
         }
+        // Row is ready if: 8 correct + the non-correct cell IS this cell
+        const rowReady = (rowCorrect === 8 && rowWrongCol === -1);
 
-        let colCorrect = 0, colEmpty = 0, colHasErr = false;
-        const colSeen = new Set();
+        let colCorrect = 0, colCorrectSet = new Set(), colWrongRow = -1;
         for (let i = 0; i < 9; i++) {
             const v = this.board.grid[i][col];
-            if (v === 0) { colEmpty++; }
-            else if (this.board.isCorrect(i, col)) {
+            if (v !== 0 && this.board.isCorrect(i, col)) {
                 colCorrect++;
-                if (colSeen.has(v)) colHasErr = true; else colSeen.add(v);
-            } else { colHasErr = true; }
+                colCorrectSet.add(v);
+            } else if (i !== row) {
+                colWrongRow = i;
+            }
         }
+        const colReady = (colCorrect === 8 && colWrongRow === -1);
 
-        let boxCorrect = 0, boxEmpty = 0, boxHasErr = false;
-        const boxSeen = new Set();
+        let boxCorrect = 0, boxCorrectSet = new Set(), boxWrongCount = 0;
         const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
         for (let r = br; r < br + 3; r++)
             for (let c = bc; c < bc + 3; c++) {
                 const v = this.board.grid[r][c];
-                if (v === 0) { boxEmpty++; }
-                else if (this.board.isCorrect(r, c)) {
+                if (v !== 0 && this.board.isCorrect(r, c)) {
                     boxCorrect++;
-                    if (boxSeen.has(v)) boxHasErr = true; else boxSeen.add(v);
-                } else { boxHasErr = true; }
+                    boxCorrectSet.add(v);
+                } else if (!(r === row && c === col)) {
+                    boxWrongCount++;
+                }
             }
-
-        // Only activate if: exactly 8 correct + 1 empty, AND no errors
-        const rowReady = (rowCorrect === 8 && rowEmpty === 1 && !rowHasErr);
-        const colReady = (colCorrect === 8 && colEmpty === 1 && !colHasErr);
-        const boxReady = (boxCorrect === 8 && boxEmpty === 1 && !boxHasErr);
+        const boxReady = (boxCorrect === 8 && boxWrongCount === 0);
 
         // Find missing numbers
         let rowMissing = 0, colMissing = 0, boxMissing = 0;
-        if (rowReady) for (let n = 1; n <= 9; n++) if (!rowSeen.has(n)) rowMissing = n;
-        if (colReady) for (let n = 1; n <= 9; n++) if (!colSeen.has(n)) colMissing = n;
-        if (boxReady) for (let n = 1; n <= 9; n++) if (!boxSeen.has(n)) boxMissing = n;
+        if (rowReady) for (let n = 1; n <= 9; n++) if (!rowCorrectSet.has(n)) rowMissing = n;
+        if (colReady) for (let n = 1; n <= 9; n++) if (!colCorrectSet.has(n)) colMissing = n;
+        if (boxReady) for (let n = 1; n <= 9; n++) if (!boxCorrectSet.has(n)) boxMissing = n;
 
         const uniqueNums = new Set();
         if (rowMissing) uniqueNums.add(rowMissing);
