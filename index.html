@@ -566,6 +566,31 @@ body {
     justify-content: center;
 }
 
+
+#hearts-bar {
+    display: flex;
+    justify-content: center;
+    padding: 4px 12px;
+    background: var(--toolbar-bg);
+    gap: 2px;
+}
+#hearts-display {
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+}
+.heart-lost { opacity: 0.25; }
+.num-btn.impossible {
+    opacity: 0.2;
+    pointer-events: none;
+    color: var(--btn-disabled);
+}
+#gameover-time {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--num-error);
+    margin: 8px 0;
+}
+
 </style>
 </head>
 <body>
@@ -590,6 +615,10 @@ body {
     <span id="timer-display">00:00</span>
     <button class="tool-btn" id="btn-pause" title="暂停">⏸</button>
     <button class="tool-btn" id="btn-settings" title="设置">⚙</button>
+</div>
+
+<div id="hearts-bar" style="display:none">
+    <span id="hearts-display"></span>
 </div>
 
 <div id="board-container" style="display:none">
@@ -639,6 +668,14 @@ body {
             <button class="dialog-btn secondary" id="btn-new-from-pause">更换难度</button>
         </div>
     </div>
+    <div class="dialog" id="dialog-gameover">
+        <h2>游戏结束</h2>
+        <p>红心已用完，挑战失败</p>
+        <div id="gameover-time">00:00</div>
+        <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-gameover-retry">重新开始</button></div>
+        <div class="dialog-btn-row"><button class="dialog-btn secondary" id="btn-gameover-home">返回主页</button></div>
+    </div>
+
     <div class="dialog" id="dialog-victory">
         <h2>恭喜通关！</h2>
         <div id="victory-difficulty"></div>
@@ -664,6 +701,16 @@ body {
         <div class="setting-row">
             <label>音效</label>
             <label class="toggle"><input type="checkbox" id="setting-mute"><span class="slider"></span></label>
+        </div>
+        <div class="setting-row">
+            <label>红心数</label>
+            <select id="setting-hearts">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
         </div>
         <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-close-settings">确定</button></div>
     </div>
@@ -1709,6 +1756,16 @@ class InputHandler {
 
         // Pause actions
         document.getElementById('btn-resume')?.addEventListener('click', () => this.game.resume());
+        document.getElementById('btn-gameover-retry')?.addEventListener('click', () => {
+            this.game.dialogs.hide();
+            this.game.startGame(this.game.difficulty);
+        });
+        document.getElementById('btn-gameover-home')?.addEventListener('click', () => {
+            this.game.dialogs.hide();
+            Storage.clearGame();
+            this.game.gameStarted = false;
+            this.game._showStartScreen();
+        });
         document.getElementById('btn-restart')?.addEventListener('click', () => {
             this.game.dialogs.hide();
             this.game.dialogs.showConfirm(
@@ -1726,6 +1783,7 @@ class InputHandler {
         document.getElementById('btn-settings')?.addEventListener('click', () => {
             document.getElementById('setting-mute').checked = this.game.sound.isMuted();
             document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'light';
+            document.getElementById('setting-hearts').value = this.game.maxLives;
             this.game.dialogs.showSettings();
         });
         document.getElementById('btn-close-settings')?.addEventListener('click', () => this.game.dialogs.hide());
@@ -1742,6 +1800,17 @@ class InputHandler {
             requestAnimationFrame(() => {
                 if (this.game.gameStarted) this.game._render();
             });
+        });
+        document.getElementById('setting-hearts')?.addEventListener('change', (e) => {
+            const v = parseInt(e.target.value);
+            if (v >= 1 && v <= 5) {
+                this.game.maxLives = v;
+                try { localStorage.setItem('sudoku_maxLives', v); } catch (e) {}
+                // Only update current lives if game not started
+                if (!this.game.gameStarted) {
+                    this.game.lives = v;
+                }
+            }
         });
 
         // Confirm dialog
@@ -2042,6 +2111,8 @@ class SudokuGame {
         this.selectedCol = null;
         this.gameStarted = false;
         this._pendingHint = null;
+        this.lives = 3;
+        this.maxLives = 3;
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
@@ -2055,6 +2126,7 @@ class SudokuGame {
         this.hints.load();
         this._loadTheme();
         this._initLang();
+        this._loadMaxLives();
 
         this.sound.loadAll();
 
@@ -2080,6 +2152,7 @@ class SudokuGame {
 
     _showStartScreen() {
         document.getElementById('toolbar-top').style.display = 'none';
+        document.getElementById('hearts-bar').style.display = 'none';
         document.getElementById('toolbar-actions').style.display = 'none';
         document.getElementById('numpad').style.display = 'none';
         document.getElementById('board-container').style.display = 'none';
@@ -2090,6 +2163,7 @@ class SudokuGame {
         document.getElementById('start-screen').style.display = 'none';
         document.getElementById('board-container').style.display = 'flex';
         document.getElementById('toolbar-top').style.display = 'flex';
+        document.getElementById('hearts-bar').style.display = 'flex';
         document.getElementById('toolbar-actions').style.display = 'flex';
         document.getElementById('numpad').style.display = 'grid';
     }
@@ -2110,6 +2184,27 @@ class SudokuGame {
         } catch (e) {}
     }
 
+    _loadMaxLives() {
+        try {
+            const v = parseInt(localStorage.getItem('sudoku_maxLives'));
+            if (v >= 1 && v <= 5) this.maxLives = v;
+        } catch (e) {}
+    }
+
+    _updateHeartsDisplay() {
+        const el = document.getElementById('hearts-display');
+        if (!el) return;
+        let html = '';
+        for (let i = 0; i < this.maxLives; i++) {
+            if (i < this.lives) {
+                html += '❤️';
+            } else {
+                html += '<span class="heart-lost">🖤</span>';
+            }
+        }
+        el.innerHTML = html;
+    }
+
     continueGame() {
         const saved = Storage.loadGame();
         if (!saved || !saved.gameStarted) return;
@@ -2119,6 +2214,7 @@ class SudokuGame {
         this._hideStartScreen();
         this._updateDifficultyLabel();
         this._updateToolbarState();
+        this._updateHeartsDisplay();
         this._resize();
         this._updateNumPadHighlight();
         this._render();
@@ -2141,9 +2237,11 @@ class SudokuGame {
         this.hintCell = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
+        this.lives = this.maxLives;
         this.selectCell(-1, -1);
 
         this._hideStartScreen();
+        this._updateHeartsDisplay();
         this._updateDifficultyLabel();
         this._updateToolbarState();
         this._resize();
@@ -2174,6 +2272,8 @@ class SudokuGame {
         this.selectedCol = saved.selectedCol;
         this.hints.remaining = saved.hintRemaining ?? 3;
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
+        this.lives = saved.lives ?? this.maxLives;
+        this.maxLives = saved.maxLives ?? 3;
 
         if (saved.historyStack) {
             this.history.stack = saved.historyStack;
@@ -2247,6 +2347,12 @@ class SudokuGame {
         if (num !== 0 && !this.board.isCorrect(r, c)) {
             this.sound.play('num_error');
             this.sound.vibrate(30);
+            this.lives--;
+            this._updateHeartsDisplay();
+            if (this.lives <= 0) {
+                this._gameOver();
+                return;
+            }
         } else if (num !== 0) {
             this.sound.play('num_right');
             this._removeRelatedNotes(num, r, c);
@@ -2499,6 +2605,23 @@ class SudokuGame {
         this._save();
     }
 
+    _gameOver() {
+        this.completed = true;
+        this.timer.pause();
+        const timeStr = this.timer.getFormatted();
+        const timeSec = this.timer.getTime();
+
+        this.stats.recordGame(this.difficulty, false, timeSec);
+
+        setTimeout(() => {
+            this.sound.play('over_fail');
+            document.getElementById('gameover-time').textContent = '用时 ' + timeStr;
+            this.dialogs.show('dialog-gameover');
+        }, 600);
+        this._render();
+        Storage.clearGame();
+    }
+
     _removeRelatedNotes(num, row, col) {
         if (this.board.removeNoteFromRelated(num, row, col) > 0) {
             this._updateNumPadHighlight();
@@ -2510,7 +2633,7 @@ class SudokuGame {
     _updateNumPadHighlight() {
         for (let i = 1; i <= 9; i++) {
             const btn = document.getElementById('num-' + i);
-            if (btn) { btn.classList.remove('note-highlight', 'last-candidate'); }
+            if (btn) { btn.classList.remove('note-highlight', 'last-candidate', 'impossible'); }
         }
         if (this.selectedRow === null || this.selectedCol === null) return;
         const r = this.selectedRow, c = this.selectedCol;
@@ -2527,9 +2650,7 @@ class SudokuGame {
     }
 
     _checkLastCandidate(row, col) {
-        // Reset smart hint
-        this._hideSmartHint();
-
+        // Simple highlight only - no tooltip
         let rowMissing = 0, rowEmpty = 0;
         const rowUsed = new Set();
         for (let i = 0; i < 9; i++) {
@@ -2555,30 +2676,37 @@ class SudokuGame {
                 else boxUsed.add(this.board.grid[r][c]);
         if (boxEmpty === 1) for (let n = 1; n <= 9; n++) if (!boxUsed.has(n)) boxMissing = n;
 
-        // Build reasoning
-        const reasons = [];
-        if (rowMissing) reasons.push({ num: rowMissing, reason: '第' + (row+1) + '行只剩这一格，应填' + rowMissing });
-        if (colMissing && colMissing !== rowMissing) reasons.push({ num: colMissing, reason: '第' + (col+1) + '列只剩这一格，应填' + colMissing });
-        if (boxMissing && boxMissing !== rowMissing && boxMissing !== colMissing) {
-            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
-            reasons.push({ num: boxMissing, reason: boxLabel + '九宫格只剩这一格，应填' + boxMissing });
-        }
-        // Re-add box if it matches another
-        if (boxMissing && (boxMissing === rowMissing || boxMissing === colMissing)) {
-            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
-            reasons.push({ num: boxMissing, reason: boxLabel + '九宫格只剩这一格，应填' + boxMissing });
+        // Highlight the unique candidates AND disable impossible numbers
+        const uniqueNums = new Set();
+        if (rowMissing) uniqueNums.add(rowMissing);
+        if (colMissing) uniqueNums.add(colMissing);
+        if (boxMissing) uniqueNums.add(boxMissing);
+
+        // Get all possible candidates for this cell
+        const allCands = new Set(Validator.getCandidates(this.board.grid, row, col));
+
+        // Highlight last-candidate numbers
+        for (const n of uniqueNums) {
+            const btn = document.getElementById('num-' + n);
+            if (btn) btn.classList.add('last-candidate');
         }
 
-        // Show unique candidate hint
-        if (reasons.length > 0) {
-            const num = reasons[0].num;
-            const text = reasons.map(r => r.reason).join('；');
-            this._showSmartHint(num, text, row, col);
-
-            // Still highlight on numpad
-            for (const n of new Set(reasons.map(r => r.num))) {
+        // Disable impossible numbers (not in candidates)
+        if (allCands.size > 0) {
+            for (let n = 1; n <= 9; n++) {
                 const btn = document.getElementById('num-' + n);
-                if (btn) btn.classList.add('last-candidate');
+                if (btn) {
+                    if (!allCands.has(n)) {
+                        btn.classList.add('impossible');
+                    } else {
+                        btn.classList.remove('impossible');
+                    }
+                }
+            }
+        } else {
+            for (let n = 1; n <= 9; n++) {
+                const btn = document.getElementById('num-' + n);
+                if (btn) btn.classList.remove('impossible');
             }
         }
     }
@@ -2713,6 +2841,8 @@ class SudokuGame {
             gameStarted: true,
             hintRemaining: this.hints.remaining,
             autoNoteUsed: this.hints.autoNoteUsed,
+            lives: this.lives,
+            maxLives: this.maxLives,
         });
     }
 
