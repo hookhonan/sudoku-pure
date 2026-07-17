@@ -238,6 +238,7 @@ body {
     justify-content: center;
     padding: 8px;
     overflow: hidden;
+    position: relative;
 }
 
 #board-canvas {
@@ -523,6 +524,48 @@ body {
     50% { transform: scale(1.08); }
 }
 
+
+#smart-hint {
+    position: absolute;
+    background: var(--dialog-bg);
+    color: var(--text-primary);
+    border: 2px solid var(--num-user);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: dialogIn 0.2s ease;
+    white-space: nowrap;
+}
+.smart-hint-text { flex: 1; font-weight: 600; }
+.smart-hint-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: var(--num-user);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border: none;
+}
+.smart-hint-btn:hover { filter: brightness(1.2); }
+.smart-hint-close {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--btn-hover);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 </style>
 </head>
 <body>
@@ -551,6 +594,11 @@ body {
 
 <div id="board-container" style="display:none">
     <canvas id="board-canvas"></canvas>
+    <div id="smart-hint" style="display:none">
+        <div class="smart-hint-text" id="smart-hint-reason"></div>
+        <button class="smart-hint-btn" id="smart-hint-apply">应用</button>
+        <button class="smart-hint-close" id="smart-hint-close">×</button>
+    </div>
 </div>
 
 <div id="toolbar-actions" style="display:none">
@@ -1380,10 +1428,8 @@ class Renderer {
     _drawNotes(ctx, board, state) {
         const cs = this.cellSize;
         const noteFontSize = cs * 0.18;
+        const boldNum = state.boldNoteNum || 0;
 
-        ctx.fillStyle = getComputedStyle(document.documentElement)
-            .getPropertyValue('--num-note').trim() || '#757575';
-        ctx.font = `${noteFontSize}px "Segoe UI", system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
@@ -1399,6 +1445,16 @@ class Renderer {
                     const nc = (num - 1) % 3;
                     const x = c * cs + nc * third + third / 2;
                     const y = r * cs + nr * third + third / 2;
+
+                    if (num === boldNum) {
+                        ctx.fillStyle = getComputedStyle(document.documentElement)
+                            .getPropertyValue('--num-user').trim() || '#1565c0';
+                        ctx.font = `bold ${noteFontSize * 1.2}px "Segoe UI", system-ui, sans-serif`;
+                    } else {
+                        ctx.fillStyle = getComputedStyle(document.documentElement)
+                            .getPropertyValue('--num-note').trim() || '#757575';
+                        ctx.font = `${noteFontSize}px "Segoe UI", system-ui, sans-serif`;
+                    }
                     ctx.fillText(num.toString(), x, y);
                 }
             }
@@ -1985,6 +2041,7 @@ class SudokuGame {
         this.selectedRow = null;
         this.selectedCol = null;
         this.gameStarted = false;
+        this._pendingHint = null;
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
@@ -2083,6 +2140,7 @@ class SudokuGame {
         this.completed = false;
         this.hintCell = null;
         this.sameNumHighlight = null;
+        this._pendingHint = null;
         this.selectCell(-1, -1);
 
         this._hideStartScreen();
@@ -2131,11 +2189,13 @@ class SudokuGame {
         if (this.paused || this.completed) return;
 
         this.hintCell = null;
+        this._pendingHint = null;
 
         if (row === -1 || col === -1) {
             this.selectedRow = null;
             this.selectedCol = null;
             this.sameNumHighlight = null;
+            this._hideSmartHint();
             this._updateNumPadHighlight();
             this._render();
             return;
@@ -2305,7 +2365,8 @@ class SudokuGame {
             return;
         }
 
-        let r, c;
+        // Find the best cell to hint
+        let r, c, explanation;
         if (this.selectedRow !== null && this.selectedCol !== null &&
             !this.board.isGiven(this.selectedRow, this.selectedCol) &&
             (this.board.isEmpty(this.selectedRow, this.selectedCol) ||
@@ -2313,26 +2374,55 @@ class SudokuGame {
             r = this.selectedRow;
             c = this.selectedCol;
         } else {
-            const emptyCells = [];
+            // Prefer cells with fewest candidates (most constrained)
+            let bestCell = null, bestCount = 10;
             for (let rr = 0; rr < 9; rr++) {
                 for (let cc = 0; cc < 9; cc++) {
                     if (!this.board.isGiven(rr, cc) &&
                         (this.board.isEmpty(rr, cc) || !this.board.isCorrect(rr, cc))) {
-                        emptyCells.push({ r: rr, c: cc });
+                        const candidates = Validator.getCandidates(this.board.grid, rr, cc);
+                        if (candidates.length < bestCount) {
+                            bestCount = candidates.length;
+                            bestCell = { r: rr, c: cc, cands: candidates };
+                        }
                     }
                 }
             }
-            if (emptyCells.length === 0) return;
-            const pick = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-            r = pick.r;
-            c = pick.c;
+            if (!bestCell) return;
+            r = bestCell.r;
+            c = bestCell.c;
         }
+
+        const answer = this.board.getHint(r, c);
+        const cands = Validator.getCandidates(this.board.grid, r, c);
+
+        // Build explanation
+        let reason = '提示：根据该格所在行、列、九宫格已有数字排除，';
+        if (cands.length === 1) {
+            reason += '仅剩数字' + answer + '可填。';
+        } else {
+            reason += '可填数字有[' + cands.join(',') + ']，推荐填' + answer + '。';
+        }
+        explanation = reason;
+
+        // Defer hint consumption until "apply"
+        this._pendingHint = { r, c, answer, explanation };
+        this._hideSmartHint();
+        this._showSmartHint(answer, explanation, r, c);
+        this.selectCell(r, c);
+        this.sound.play('prop_notice');
+        this._render();
+    }
+
+    _applyHint() {
+        if (!this._pendingHint) return;
+        const { r, c, answer } = this._pendingHint;
+        this._pendingHint = null;
 
         this.hints.use();
 
         const oldVal = this.board.getCell(r, c);
         const oldNotes = new Set(this.board.getNotes(r, c));
-        const answer = this.board.getHint(r, c);
 
         this.board.setCell(r, c, answer);
         this.board.notes[r][c].clear();
@@ -2346,7 +2436,7 @@ class SudokuGame {
 
         this.hintCell = { r, c };
         this.selectCell(r, c);
-        this.sound.play('prop_notice');
+        this.sound.play('num_right');
 
         this._updateHintButton();
         this._updateNumPadHighlight();
@@ -2437,6 +2527,9 @@ class SudokuGame {
     }
 
     _checkLastCandidate(row, col) {
+        // Reset smart hint
+        this._hideSmartHint();
+
         let rowMissing = 0, rowEmpty = 0;
         const rowUsed = new Set();
         for (let i = 0; i < 9; i++) {
@@ -2462,14 +2555,69 @@ class SudokuGame {
                 else boxUsed.add(this.board.grid[r][c]);
         if (boxEmpty === 1) for (let n = 1; n <= 9; n++) if (!boxUsed.has(n)) boxMissing = n;
 
-        const candidates = new Set();
-        if (rowMissing) candidates.add(rowMissing);
-        if (colMissing) candidates.add(colMissing);
-        if (boxMissing) candidates.add(boxMissing);
-        for (const n of candidates) {
-            const btn = document.getElementById('num-' + n);
-            if (btn) btn.classList.add('last-candidate');
+        // Build reasoning
+        const reasons = [];
+        if (rowMissing) reasons.push({ num: rowMissing, reason: '第' + (row+1) + '行只剩这一格，应填' + rowMissing });
+        if (colMissing && colMissing !== rowMissing) reasons.push({ num: colMissing, reason: '第' + (col+1) + '列只剩这一格，应填' + colMissing });
+        if (boxMissing && boxMissing !== rowMissing && boxMissing !== colMissing) {
+            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
+            reasons.push({ num: boxMissing, reason: boxLabel + '九宫格只剩这一格，应填' + boxMissing });
         }
+        // Re-add box if it matches another
+        if (boxMissing && (boxMissing === rowMissing || boxMissing === colMissing)) {
+            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
+            reasons.push({ num: boxMissing, reason: boxLabel + '九宫格只剩这一格，应填' + boxMissing });
+        }
+
+        // Show unique candidate hint
+        if (reasons.length > 0) {
+            const num = reasons[0].num;
+            const text = reasons.map(r => r.reason).join('；');
+            this._showSmartHint(num, text, row, col);
+
+            // Still highlight on numpad
+            for (const n of new Set(reasons.map(r => r.num))) {
+                const btn = document.getElementById('num-' + n);
+                if (btn) btn.classList.add('last-candidate');
+            }
+        }
+    }
+
+    _showSmartHint(num, reason, row, col) {
+        const hintEl = document.getElementById('smart-hint');
+        const reasonEl = document.getElementById('smart-hint-reason');
+        if (!hintEl || !reasonEl) return;
+        reasonEl.textContent = reason;
+        document.getElementById('smart-hint-apply').onclick = () => {
+            this._hideSmartHint();
+            if (this._pendingHint) {
+                this._applyHint();
+            } else {
+                this.selectCell(row, col);
+                this.inputNumber(num);
+            }
+        };
+        document.getElementById('smart-hint-close').onclick = () => {
+            this._hideSmartHint();
+            this._pendingHint = null;
+        };
+        hintEl.style.display = 'flex';
+
+        // Position near the cell
+        const canvas = this.renderer.canvas;
+        const boardSize = this.renderer.boardSize;
+        const cs = boardSize / 9;
+        const canvasRect = canvas.getBoundingClientRect();
+        const containerRect = document.getElementById('board-container').getBoundingClientRect();
+        const cellCenterX = canvasRect.left - containerRect.left + col * cs / (boardSize / canvasRect.width) + cs / (boardSize / canvasRect.width) / 2;
+        const cellTop = canvasRect.top - containerRect.top + row * cs / (boardSize / canvasRect.width);
+        hintEl.style.left = Math.min(cellCenterX, containerRect.width - 260) + 'px';
+        hintEl.style.top = (cellTop > 100 ? cellTop - 40 : cellTop + cs / (boardSize / canvasRect.width) + 4) + 'px';
+    }
+
+    _hideSmartHint() {
+        const hintEl = document.getElementById('smart-hint');
+        if (hintEl) hintEl.style.display = 'none';
     }
 
     _updateAutoNoteButton() {
@@ -2590,9 +2738,16 @@ class SudokuGame {
             selectedCol: this.selectedCol,
             sameNumHighlight: this.sameNumHighlight,
             hintCell: this.hintCell,
+            boldNoteNum: this._getBoldNoteNum(),
         };
         this.renderer.draw(this.board, state);
         this._updateToolbarState();
+    }
+
+    _getBoldNoteNum() {
+        if (this.selectedRow === null || this.selectedCol === null) return 0;
+        const val = this.board.getCell(this.selectedRow, this.selectedCol);
+        return (val !== 0) ? val : 0;
     }
 }
 
