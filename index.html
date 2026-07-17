@@ -2300,7 +2300,10 @@ class SudokuGame {
         if (this.paused || this.completed) return;
 
         this.hintCell = null;
-        this._pendingHint = null;
+        // Only clear pending hint if selecting a different cell
+        if (row !== this.selectedRow || col !== this.selectedCol) {
+            this._pendingHint = null;
+        }
 
         if (row === -1 || col === -1) {
             this.selectedRow = null;
@@ -2514,24 +2517,64 @@ class SudokuGame {
         }
 
         const answer = this.board.getHint(r, c);
-        const cands = Validator.getCandidates(this.board.grid, r, c);
 
-        // Build explanation
-        let reason = '提示：根据该格所在行、列、九宫格已有数字排除，';
-        if (cands.length === 1) {
-            reason += '仅剩数字' + answer + '可填。';
-        } else {
-            reason += '可填数字有[' + cands.join(',') + ']，推荐填' + answer + '。';
-        }
-        explanation = reason;
+        // Build specific explanation
+        explanation = this._buildHintReason(r, c, answer);
 
-        // Defer hint consumption until "apply"
-        this._pendingHint = { r, c, answer, explanation };
+        // Defer hint consumption until "apply" - must set _pendingHint AFTER selectCell
         this._hideSmartHint();
-        this._showSmartHint(answer, explanation, r, c);
         this.selectCell(r, c);
+        this._pendingHint = { r, c, answer, explanation };
+        this._showSmartHint(answer, explanation, r, c);
         this.sound.play('prop_notice');
         this._render();
+    }
+
+    _buildHintReason(row, col, answer) {
+        // Check row: what numbers are missing?
+        const rowNums = new Set();
+        let rowEmpty = 0;
+        for (let i = 0; i < 9; i++) {
+            if (this.board.grid[row][i] !== 0) rowNums.add(this.board.grid[row][i]);
+            else rowEmpty++;
+        }
+        const rowMissing = [];
+        for (let n = 1; n <= 9; n++) if (!rowNums.has(n)) rowMissing.push(n);
+
+        // Check column
+        const colNums = new Set();
+        let colEmpty = 0;
+        for (let i = 0; i < 9; i++) {
+            if (this.board.grid[i][col] !== 0) colNums.add(this.board.grid[i][col]);
+            else colEmpty++;
+        }
+        const colMissing = [];
+        for (let n = 1; n <= 9; n++) if (!colNums.has(n)) colMissing.push(n);
+
+        // Check box
+        const boxNums = new Set();
+        let boxEmpty = 0;
+        const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+        for (let r = br; r < br + 3; r++)
+            for (let c = bc; c < bc + 3; c++)
+                if (this.board.grid[r][c] !== 0) boxNums.add(this.board.grid[r][c]);
+                else boxEmpty++;
+
+        // Get all candidates for this cell
+        const cands = Validator.getCandidates(this.board.grid, row, col);
+
+        if (cands.length === 1) {
+            // Only one candidate - explain which constraint narrowed it
+            if (rowEmpty === 1) return '第'+(row+1)+'行只剩这一格，应填'+answer;
+            if (colEmpty === 1) return '第'+(col+1)+'列只剩这一格，应填'+answer;
+            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
+            if (boxEmpty === 1) return boxLabel+'九宫格只剩这一格，应填'+answer;
+            return '根据行、列、宫排除法，该格仅剩数字'+answer+'可填';
+        } else {
+            // Multiple candidates, explain using elimination
+            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
+            return '排除法：该行已有['+[...rowNums].join(',')+']，该列已有['+[...colNums].join(',')+']，'+boxLabel+'宫已有['+[...boxNums].join(',')+']。剩余候选['+cands.join(',')+']，推荐'+answer;
+        }
     }
 
     _applyHint() {
