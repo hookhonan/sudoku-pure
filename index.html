@@ -2375,6 +2375,7 @@ class SudokuGame {
             this._removeRelatedNotes(num, r, c);
         }
 
+        this._updateNumPadHighlight();
         this._render();
         this._checkCompletion();
         this._save();
@@ -2742,14 +2743,21 @@ class SudokuGame {
         // Get all possible candidates for this cell
         const allCands = new Set(Validator.getCandidates(this.board.grid, row, col));
 
-        // Highlight last-candidate numbers
-        for (const n of uniqueNums) {
-            const btn = document.getElementById('num-' + n);
-            if (btn) btn.classList.add('last-candidate');
-        }
-
-        // Disable impossible numbers (only when setting enabled)
-        if (this.disableImpossible && allCands.size > 0) {
+        // Highlight last-candidate numbers AND disable others
+        if (uniqueNums.size > 0) {
+            for (let n = 1; n <= 9; n++) {
+                const btn = document.getElementById('num-' + n);
+                if (btn) {
+                    if (uniqueNums.has(n)) {
+                        btn.classList.add('last-candidate');
+                        btn.classList.remove('impossible');
+                    } else {
+                        btn.classList.add('impossible');
+                    }
+                }
+            }
+        } else if (this.disableImpossible && allCands.size > 0) {
+            // Normal mode: disable impossible numbers (only when setting enabled)
             for (let n = 1; n <= 9; n++) {
                 const btn = document.getElementById('num-' + n);
                 if (btn) {
