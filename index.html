@@ -183,10 +183,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 8px;
+    padding: 2px 8px;
     background: var(--toolbar-bg);
     z-index: 10;
-    min-height: 40px;
+    min-height: 32px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -202,10 +202,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 8px;
+    padding: 2px 8px;
     background: var(--toolbar-bg);
     z-index: 10;
-    min-height: 36px;
+    min-height: 28px;
     gap: 8px;
     width: 100%;
     box-sizing: border-box;
@@ -260,7 +260,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 8px;
+    padding: 6px 8px;
     overflow: hidden;
     position: relative;
 }
@@ -276,7 +276,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 4px 8px;
+    padding: 2px 8px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -321,8 +321,8 @@ body {
 #numpad {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    gap: 4px;
-    padding: 6px 8px max(6px, env(safe-area-inset-bottom)) 8px;
+    gap: 3px;
+    padding: 4px 8px max(4px, env(safe-area-inset-bottom)) 8px;
     background: var(--numpad-bg);
     box-shadow: var(--numpad-shadow);
     z-index: 10;
@@ -559,18 +559,18 @@ body {
 
 /* Responsive */
 @media (min-width: 600px) {
-    #board-container { padding: 16px 16px; }
-    #top-nav { padding: 6px 16px; }
-    #info-bar { padding: 4px 16px; }
+    #board-container { padding: 12px 16px; }
+    #top-nav { padding: 4px 16px; }
+    #info-bar { padding: 2px 16px; }
     #numpad {
-        gap: 6px;
-        padding: 8px 16px max(8px, env(safe-area-inset-bottom)) 16px;
+        gap: 5px;
+        padding: 6px 16px max(6px, env(safe-area-inset-bottom)) 16px;
         max-width: 500px;
         margin: 0 auto;
         border-radius: 16px 16px 0 0;
     }
     .num-btn { font-size: 1.5rem; }
-    #toolbar-actions { gap: 8px; padding: 6px 16px; }
+    #toolbar-actions { gap: 8px; padding: 4px 16px; }
     .action-btn { width: 48px; height: 48px; }
 }
 
