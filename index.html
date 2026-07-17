@@ -183,10 +183,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 2px 8px;
-    background: var(--toolbar-bg);
+    padding: 1px 8px;
+    background: var(--bg-primary);
     z-index: 10;
-    min-height: 32px;
+    min-height: 28px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -202,10 +202,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 2px 8px;
-    background: var(--toolbar-bg);
+    padding: 1px 8px;
+    background: var(--bg-primary);
     z-index: 10;
-    min-height: 28px;
+    min-height: 26px;
     gap: 8px;
     width: 100%;
     box-sizing: border-box;
@@ -260,7 +260,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 8px;
+    padding: 4px 8px;
     overflow: hidden;
     position: relative;
 }
@@ -321,32 +321,45 @@ body {
 #numpad {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    gap: 3px;
-    padding: 4px 8px max(4px, env(safe-area-inset-bottom)) 8px;
-    background: var(--numpad-bg);
-    box-shadow: var(--numpad-shadow);
+    gap: 2px;
+    padding: 4px 0 max(4px, env(safe-area-inset-bottom)) 0;
+    background: transparent;
+    box-shadow: none;
     z-index: 10;
     width: 100%;
     box-sizing: border-box;
 }
 
 .num-btn {
-    aspect-ratio: 1;
-    max-height: 52px;
-    border-radius: 8px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 1.3rem;
+    gap: 1px;
+    aspect-ratio: 1;
+    max-height: 56px;
+    border-radius: 6px;
+    border: 1.5px solid var(--grid-line);
+    font-size: 1.25rem;
     font-weight: 600;
     color: var(--text-primary);
-    background: var(--btn-bg);
+    background: var(--bg-secondary);
     transition: all 0.12s;
+    padding: 2px;
 }
-.num-btn:hover { background: var(--btn-hover); }
+.num-btn:hover { background: var(--btn-hover); border-color: var(--num-user); }
 .num-btn:active {
     background: var(--btn-active);
     transform: scale(0.93);
+}
+.num-btn .num-main {
+    line-height: 1;
+}
+.num-btn .num-remain {
+    font-size: 0.55rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1;
 }
 
 /* ── Dialogs ── */
@@ -559,17 +572,14 @@ body {
 
 /* Responsive */
 @media (min-width: 600px) {
-    #board-container { padding: 12px 16px; }
-    #top-nav { padding: 4px 16px; }
-    #info-bar { padding: 2px 16px; }
+    #board-container { padding: 8px 16px; }
+    #top-nav { padding: 2px 16px; }
+    #info-bar { padding: 1px 16px; }
     #numpad {
-        gap: 5px;
-        padding: 6px 16px max(6px, env(safe-area-inset-bottom)) 16px;
-        max-width: 500px;
-        margin: 0 auto;
-        border-radius: 16px 16px 0 0;
+        gap: 4px;
+        padding: 6px 0 max(6px, env(safe-area-inset-bottom)) 0;
     }
-    .num-btn { font-size: 1.5rem; }
+    .num-btn .num-main { font-size: 1.5rem; }
     #toolbar-actions { gap: 8px; padding: 4px 16px; }
     .action-btn { width: 48px; height: 48px; }
 }
@@ -578,17 +588,21 @@ body {
 
 .num-btn.note-highlight {
     background: var(--highlight-selected);
-    color: var(--num-user);
-    font-weight: 700;
+    border-color: var(--num-user);
     outline: 2px solid var(--num-user);
     outline-offset: -2px;
 }
+.num-btn.note-highlight .num-main { color: var(--num-user); font-weight: 700; }
+.num-btn.note-highlight .num-remain { color: var(--num-user); opacity: 0.7; }
+
 .num-btn.last-candidate {
     background: var(--num-user);
-    color: #fff;
-    font-weight: 800;
+    border-color: var(--num-user);
     animation: pulse 0.8s infinite;
 }
+.num-btn.last-candidate .num-main { color: #fff; font-weight: 800; }
+.num-btn.last-candidate .num-remain { color: rgba(255,255,255,0.7); }
+
 @keyframes pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.08); }
@@ -811,15 +825,15 @@ body {
 </div>
 
 <div id="numpad" style="display:none">
-    <button class="num-btn" id="num-1">1</button>
-    <button class="num-btn" id="num-2">2</button>
-    <button class="num-btn" id="num-3">3</button>
-    <button class="num-btn" id="num-4">4</button>
-    <button class="num-btn" id="num-5">5</button>
-    <button class="num-btn" id="num-6">6</button>
-    <button class="num-btn" id="num-7">7</button>
-    <button class="num-btn" id="num-8">8</button>
-    <button class="num-btn" id="num-9">9</button>
+    <button class="num-btn" id="num-1"><span class="num-main">1</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-2"><span class="num-main">2</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-3"><span class="num-main">3</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-4"><span class="num-main">4</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-5"><span class="num-main">5</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-6"><span class="num-main">6</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-7"><span class="num-main">7</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-8"><span class="num-main">8</span><span class="num-remain">9</span></button>
+    <button class="num-btn" id="num-9"><span class="num-main">9</span><span class="num-remain">9</span></button>
 </div>
 
 <div id="dialog-overlay">
@@ -3139,11 +3153,27 @@ class SudokuGame {
         }
     }
 
+    _updateNumCounts() {
+        // Count correctly placed occurrences of each number 1-9
+        const counts = {};
+        for (let n = 1; n <= 9; n++) counts[n] = 0;
+        for (let r = 0; r < 9; r++)
+            for (let c = 0; c < 9; c++) {
+                const v = this.board.grid[r][c];
+                if (v !== 0 && this.board.isCorrect(r, c)) counts[v]++;
+            }
+        for (let n = 1; n <= 9; n++) {
+            const el = document.querySelector('#num-' + n + ' .num-remain');
+            if (el) el.textContent = 9 - counts[n];
+        }
+    }
+
     _updateNumPadHighlight() {
         for (let i = 1; i <= 9; i++) {
             const btn = document.getElementById('num-' + i);
             if (btn) { btn.classList.remove('note-highlight', 'last-candidate', 'impossible'); }
         }
+        this._updateNumCounts();
         if (this.selectedRow === null || this.selectedCol === null) return;
         const r = this.selectedRow, c = this.selectedCol;
         if (this.noteMode && this.board.getCell(r, c) === 0) {
