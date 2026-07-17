@@ -1808,13 +1808,8 @@ class InputHandler {
         });
         document.getElementById('setting-hearts')?.addEventListener('change', (e) => {
             const v = parseInt(e.target.value);
-            if (v >= 1 && v <= 5) {
-                this.game.maxLives = v;
-                try { localStorage.setItem('sudoku_maxLives', v); } catch (e) {}
-                if (!this.game.gameStarted) {
-                    this.game.lives = v;
-                }
-            }
+            if (v < 1 || v > 5) return;
+            this.game._applyMaxLives(v);
         });
         document.getElementById('setting-disable')?.addEventListener('change', (e) => {
             this.game.disableImpossible = e.target.checked;
@@ -2200,6 +2195,48 @@ class SudokuGame {
             if (v >= 1 && v <= 5) this.maxLives = v;
             this.disableImpossible = localStorage.getItem('sudoku_disableImpossible') === 'true';
         } catch (e) {}
+    }
+
+    _applyMaxLives(newMax) {
+        const oldMax = this.maxLives;
+        this.maxLives = newMax;
+        try { localStorage.setItem('sudoku_maxLives', newMax); } catch (e) {}
+
+        if (!this.gameStarted) {
+            this.lives = newMax;
+            this._updateHeartsDisplay();
+            return;
+        }
+
+        if (newMax > oldMax) {
+            // Increasing: add the difference
+            this.lives = Math.min(this.lives + (newMax - oldMax), newMax);
+            this._updateHeartsDisplay();
+        } else if (newMax < oldMax && this.lives > newMax) {
+            // Decreasing below current lives: confirm with user
+            const saveLives = this.lives;
+            this.dialogs.showConfirm(
+                '确认修改红心数',
+                '当前有' + saveLives + '颗红心，改为最大' + newMax + '颗将立即结束游戏。确定修改吗？',
+                () => {
+                    this.lives = 0;
+                    this._updateHeartsDisplay();
+                    this._gameOver();
+                }
+            );
+            // Reset max back if user cancels
+            const origCancel = document.getElementById('confirm-cancel').onclick;
+            document.getElementById('confirm-cancel').onclick = () => {
+                this.maxLives = oldMax;
+                document.getElementById('setting-hearts').value = oldMax;
+                try { localStorage.setItem('sudoku_maxLives', oldMax); } catch (e) {}
+                this.dialogs.hide();
+            };
+        } else {
+            // Decreasing but lives <= newMax: just cap it
+            this.lives = Math.min(this.lives, newMax);
+            this._updateHeartsDisplay();
+        }
     }
 
     _updateHeartsDisplay() {
