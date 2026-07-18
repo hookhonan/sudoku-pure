@@ -818,8 +818,8 @@ body {
 
 <div id="toolbar-actions" style="display:none">
     <button class="action-btn" id="btn-undo"><span class="icon">↩</span><span>撤销</span></button>
-    <button class="action-btn" id="btn-erase"><span class="icon">⌫</span><span>擦除</span></button>
-    <button class="action-btn" id="btn-note"><span class="icon">✏</span><span>笔记</span></button>
+    <button class="action-btn" id="btn-erase"><span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="14" height="10" rx="1.5" transform="rotate(-15 10 12)"/><line x1="7" y1="16" x2="18" y2="6"/></svg></span><span>擦除</span></button>
+    <button class="action-btn" id="btn-note"><span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span><span>笔记</span></button>
     <button class="action-btn" id="btn-autonote"><span class="icon">✍</span><span>一键笔记</span></button>
     <button class="action-btn" id="btn-hint"><span class="icon">💡</span><span>提示</span><span id="hint-count">3</span></button>
 </div>
@@ -909,6 +909,10 @@ body {
                 <option value="4">4</option>
                 <option value="5">5</option>
             </select>
+        </div>
+        <div class="setting-row">
+            <label for="setting-autonote">一键笔记</label>
+            <label class="toggle"><input type="checkbox" id="setting-autonote"><span class="slider"></span></label>
         </div>
         <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-close-settings">确定</button></div>
     </div>
@@ -1113,10 +1117,10 @@ class SeededRNG {
 
 class Generator {
     static DIFFICULTY = {
-        easy:   { label: '简单', labelEn: 'Easy',   givenMin: 41, givenMax: 45 },
-        medium: { label: '中等', labelEn: 'Medium', givenMin: 36, givenMax: 40 },
-        hard:   { label: '困难', labelEn: 'Hard',   givenMin: 31, givenMax: 35 },
-        expert: { label: '专家', labelEn: 'Expert', givenMin: 25, givenMax: 30 },
+        easy:   { label: '简单', labelEn: 'Easy',   givenMin: 45, givenMax: 53 },
+        medium: { label: '中等', labelEn: 'Medium', givenMin: 38, givenMax: 46 },
+        hard:   { label: '困难', labelEn: 'Hard',   givenMin: 31, givenMax: 39 },
+        expert: { label: '专家', labelEn: 'Expert', givenMin: 24, givenMax: 32 },
     };
 
     static generate(difficulty = 'medium') {
@@ -1186,7 +1190,13 @@ class Generator {
     static generateSeeded(difficulty, seed) {
         const rng = new SeededRNG(difficulty + '_' + seed);
         const config = this.DIFFICULTY[difficulty];
-        const targetGiven = rng.randomInt(config.givenMin, config.givenMax);
+        // Extract level number from seed (e.g. 'L5' -> 5)
+        const levelMatch = seed.match(/\d+/);
+        const level = levelMatch ? parseInt(levelMatch[0]) : 15;
+        // Progressive difficulty: earlier levels get more given cells
+        const totalLevels = 30;
+        const progress = (level - 1) / (totalLevels - 1); // 0.0 to 1.0
+        const targetGiven = Math.round(config.givenMax - progress * (config.givenMax - config.givenMin));
 
         const solution = this._generateSeededSolution(rng);
         const puzzle = this._createSeededPuzzle(solution, 81 - targetGiven, rng);
@@ -1543,8 +1553,8 @@ class LevelManager {
     }
 
     isUnlocked(difficulty, level) {
-        if (level === 1) return true;
-        return this.isCompleted(difficulty, level - 1);
+        // DEBUG: All levels always unlocked
+        return true;
     }
 
     getProgressSummary(difficulty) {
@@ -2128,6 +2138,7 @@ class InputHandler {
             document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'light';
             document.getElementById('setting-hearts').value = this.game.maxLives;
             document.getElementById('setting-disable').checked = this.game.disableImpossible;
+            document.getElementById('setting-autonote').checked = this.game.autoNoteEnabled;
             try {
                 document.getElementById('setting-fontsize').value = localStorage.getItem('sudoku_fontSize') || 'medium';
             } catch (e) {}
@@ -2160,6 +2171,11 @@ class InputHandler {
             this.game.disableImpossible = e.target.checked;
             try { localStorage.setItem('sudoku_disableImpossible', e.target.checked); } catch (e) {}
             this.game._updateNumPadHighlight();
+        });
+        document.getElementById('setting-autonote')?.addEventListener('change', (e) => {
+            this.game.autoNoteEnabled = e.target.checked;
+            try { localStorage.setItem('sudoku_autoNoteEnabled', e.target.checked); } catch (e) {}
+            this.game._updateAutoNoteButton();
         });
 
         // Confirm dialog
@@ -2466,6 +2482,7 @@ class SudokuGame {
         this.lives = 3;
         this.maxLives = 3;
         this.disableImpossible = false;
+        this.autoNoteEnabled = false;
         this.levelManager = new LevelManager();
         this.gameMode = 'random'; // 'level' or 'random'
         this.currentLevel = 1;
@@ -2601,6 +2618,7 @@ class SudokuGame {
             const v = parseInt(localStorage.getItem('sudoku_maxLives'));
             if (v >= 1 && v <= 5) this.maxLives = v;
             this.disableImpossible = localStorage.getItem('sudoku_disableImpossible') === 'true';
+            this.autoNoteEnabled = localStorage.getItem('sudoku_autoNoteEnabled') === 'true';
         } catch (e) {}
     }
 
@@ -2756,6 +2774,7 @@ class SudokuGame {
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
         this.lives = saved.lives ?? this.maxLives;
         this.maxLives = saved.maxLives ?? 3;
+        this.autoNoteEnabled = saved.autoNoteEnabled ?? false;
         this.gameMode = saved.gameMode || 'random';
         this.currentLevel = saved.currentLevel || 1;
 
@@ -3116,6 +3135,12 @@ class SudokuGame {
 
     autoNote() {
         if (this.paused || this.completed) return;
+        if (!this.autoNoteEnabled) {
+            this.sound.play('num_error');
+            this._shakeElement(document.getElementById('btn-autonote'));
+            this._showAutoNoteTooltip();
+            return;
+        }
         if (!this.hints.canUseAutoNote()) {
             this.sound.play('num_error');
             this._shakeElement(document.getElementById('btn-autonote'));
@@ -3352,9 +3377,30 @@ class SudokuGame {
     _updateAutoNoteButton() {
         const btn = document.getElementById('btn-autonote');
         if (btn) {
-            if (this.hints.canUseAutoNote()) btn.classList.remove('disabled');
-            else btn.classList.add('disabled');
+            if (!this.autoNoteEnabled) {
+                btn.classList.add('auto-note-disabled');
+                btn.classList.remove('disabled');
+            } else if (this.hints.canUseAutoNote()) {
+                btn.classList.remove('disabled', 'auto-note-disabled');
+            } else {
+                btn.classList.add('disabled');
+                btn.classList.remove('auto-note-disabled');
+            }
         }
+    }
+
+    _showAutoNoteTooltip() {
+        const btn = document.getElementById('btn-autonote');
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const tooltip = document.createElement('div');
+        tooltip.className = 'auto-note-tooltip';
+        tooltip.textContent = '需在设置中启用';
+        tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - 10) + 'px';
+        tooltip.style.transform = 'translate(-50%, -100%)';
+        document.body.appendChild(tooltip);
+        setTimeout(() => tooltip.remove(), 1000);
     }
 
     _checkCompletion() {
@@ -3454,6 +3500,7 @@ class SudokuGame {
             autoNoteUsed: this.hints.autoNoteUsed,
             lives: this.lives,
             maxLives: this.maxLives,
+            autoNoteEnabled: this.autoNoteEnabled,
         });
     }
 
