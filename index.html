@@ -303,7 +303,6 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0 8px 4px 8px;
-    overflow: hidden;
     position: relative;
 }
 
@@ -666,46 +665,77 @@ body {
 }
 
 
+#hint-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--dialog-overlay);
+    z-index: 150;
+}
+#hint-backdrop.active {
+    display: block;
+}
 #smart-hint {
-    position: absolute;
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
     background: var(--dialog-bg);
     color: var(--text-primary);
     border: 2px solid var(--num-user);
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-size: 0.85rem;
-    z-index: 20;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.9rem;
+    z-index: 200;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    gap: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     animation: dialogIn 0.2s ease;
-    white-space: nowrap;
+    max-width: 94vw;
+    width: auto;
+    min-width: 280px;
 }
-.smart-hint-text { flex: 1; font-weight: 600; }
+.smart-hint-text {
+    flex: 1 1 100%;
+    font-weight: 600;
+    line-height: 1.5;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
 .smart-hint-btn {
-    padding: 4px 12px;
-    border-radius: 6px;
+    padding: 8px 20px;
+    border-radius: 8px;
     background: var(--num-user);
     color: #fff;
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     cursor: pointer;
     border: none;
+    flex: 1;
+    min-width: 80px;
 }
 .smart-hint-btn:hover { filter: brightness(1.2); }
+.smart-hint-btn:active { transform: scale(0.96); }
 .smart-hint-close {
-    width: 20px; height: 20px;
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 28px; height: 28px;
     border-radius: 50%;
-    border: none;
-    background: var(--btn-hover);
-    color: var(--text-secondary);
-    font-size: 0.75rem;
+    border: 2px solid var(--dialog-bg);
+    background: var(--text-secondary);
+    color: var(--dialog-bg);
+    font-size: 1rem;
+    font-weight: 700;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
+.smart-hint-close:active { transform: scale(0.9); }
 
 
 #hearts-display {
@@ -862,7 +892,8 @@ body {
         </div>
     </div>
     <canvas id="board-canvas"></canvas>
-    <div id="smart-hint" style="display:none">
+    <div id="hint-backdrop"></div>
+        <div id="smart-hint" style="display:none">
         <div class="smart-hint-text" id="smart-hint-reason"></div>
         <button class="smart-hint-btn" id="smart-hint-apply">应用</button>
         <button class="smart-hint-close" id="smart-hint-close">×</button>
@@ -3576,6 +3607,7 @@ class SudokuGame {
     _showSmartHint(num, reason, row, col) {
         const hintEl = document.getElementById('smart-hint');
         const reasonEl = document.getElementById('smart-hint-reason');
+        const backdrop = document.getElementById('hint-backdrop');
         if (!hintEl || !reasonEl) return;
         reasonEl.textContent = reason;
         document.getElementById('smart-hint-apply').onclick = () => {
@@ -3591,23 +3623,33 @@ class SudokuGame {
             this._hideSmartHint();
             this._pendingHint = null;
         };
+        // Clicking backdrop dismisses without consuming hint
+        if (backdrop) {
+            backdrop.onclick = () => {
+                this._hideSmartHint();
+                this._pendingHint = null;
+            };
+            backdrop.classList.add('active');
+        }
         hintEl.style.display = 'flex';
-
-        // Position near the cell
-        const canvas = this.renderer.canvas;
-        const boardSize = this.renderer.boardSize;
-        const cs = boardSize / 9;
-        const canvasRect = canvas.getBoundingClientRect();
-        const containerRect = document.getElementById('board-container').getBoundingClientRect();
-        const cellCenterX = canvasRect.left - containerRect.left + col * cs / (boardSize / canvasRect.width) + cs / (boardSize / canvasRect.width) / 2;
-        const cellTop = canvasRect.top - containerRect.top + row * cs / (boardSize / canvasRect.width);
-        hintEl.style.left = Math.min(cellCenterX, containerRect.width - 260) + 'px';
-        hintEl.style.top = (cellTop > 100 ? cellTop - 40 : cellTop + cs / (boardSize / canvasRect.width) + 4) + 'px';
+        // Use fixed bottom positioning — always visible regardless of cell
+        hintEl.style.bottom = '80px';
+        hintEl.style.left = '50%';
+        hintEl.style.transform = 'translateX(-50%)';
+        hintEl.style.top = 'auto';
     }
 
     _hideSmartHint() {
         const hintEl = document.getElementById('smart-hint');
-        if (hintEl) hintEl.style.display = 'none';
+        const backdrop = document.getElementById('hint-backdrop');
+        if (hintEl) {
+            hintEl.style.display = 'none';
+            hintEl.style.bottom = '';
+            hintEl.style.left = '';
+            hintEl.style.transform = '';
+            hintEl.style.top = '';
+        }
+        if (backdrop) backdrop.classList.remove('active');
     }
 
     _updateAutoNoteButton() {
