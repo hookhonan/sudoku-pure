@@ -59,13 +59,15 @@ sudoku-pure/
 
 ### APK 构建步骤（快速参考）
 ```bash
+# 路径变量
 SDK="D:/workspace/Sudoku/android-sdk"; BUILD_TOOLS="$SDK/build-tools/34.0.0"
-PLATFORM="$SDK/platforms/android-34"; PROJ="apk-project"; OUTDIR="$PROJ/build"
-JAVA_HOME="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_17.0.7.v20230425-1502/jre"
-# 1. cp index.html → $OUTDIR/assets/
-# 2. aapt2 compile + link + javac + d8 + aapt add + zipalign + apksigner
+PLATFORM="$SDK/platforms/android-34"; PROJ="apk-project"; OUTDIR="$PROJ/build2"
+JAVA="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_17.0.7.v20230425-1502/jre/bin/java"
+JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_17.0.7.v20230425-1502/jre/bin/javac"
+# 1. mkdir -p $OUTDIR/assets && cp index.html $OUTDIR/assets/
+# 2. aapt2 compile → link → javac → d8(com.android.tools.r8.D8,传所有class) → aapt add → zipalign → apksigner
 ```
-完整命令见 APK-ISSUES.md 末尾。
+完整步骤见下方"APK 构建要点"。
 
 ## 测试环境
 
@@ -103,10 +105,13 @@ JAVA_HOME="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.op
 - 下载后存为 `icon-app.png`，用 PIL resize 到各密度
 
 ### APK 构建要点
-- `d8` 和 `apksigner` 是 `.bat` 包装，直接用 `java -jar lib/d8.jar` / `java -jar lib/apksigner.jar` 更可靠
+- `d8` 和 `apksigner` 是 `.bat` 包装，bash 环境下直接用 `java -cp lib/d8.jar com.android.tools.r8.D8` 更可靠
+- d8 必须传入所有 class 文件（含内部类 `MainActivity$SudokuJSInterface.class` 和 `R*.class`），否则报 nest mate 错误
+- `java`/`javac` 不在 PATH 中，必须使用完整路径（见上方 JAVA/JAVAC 变量）
+- apksigner 用 `java -jar lib/apksigner.jar` 可正常运行
 - 构建前必须 `cp index.html → $OUTDIR/assets/`
 - `aapt2 link` 需要 res.zip 作为位置参数传入
-- 需先生成 keystore 再签名 (`keytool -genkey`)
+- OUTDIR 使用 `build2`（`build` 已被 .gitignore 忽略）
 
 ### 文档
 - `APK-ISSUES.md`: 问题记录和修复日志
