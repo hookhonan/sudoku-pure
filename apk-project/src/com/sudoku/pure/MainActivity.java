@@ -1,9 +1,11 @@
 package com.sudoku.pure;
 
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -13,6 +15,14 @@ import android.view.ViewGroup;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private boolean backHandledByJS = false;
+
+    public class SudokuJSInterface {
+        @JavascriptInterface
+        public void onBackPressed(boolean handled) {
+            backHandledByJS = handled;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +36,13 @@ public class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         );
+
+        // Allow drawing in display cutout area (notch phones)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
 
         // Use FrameLayout to ensure WebView fills the entire screen
         FrameLayout layout = new FrameLayout(this);
@@ -51,6 +68,7 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
 
+        webView.addJavascriptInterface(new SudokuJSInterface(), "SudokuApp");
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -60,11 +78,16 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        backHandledByJS = false;
+        // Ask the WebView if it handled the back press (e.g. going to start screen)
+        webView.evaluateJavascript("javascript:window._onBackPressed&&window._onBackPressed()", null);
+        // Re-read via JS interface callback (async, so we post a delayed check)
+        webView.postDelayed(() -> {
+            if (!backHandledByJS) {
+                // JS didn't handle it - exit the app
+                finish();
+            }
+        }, 150);
     }
 
     @Override

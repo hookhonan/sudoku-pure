@@ -4,13 +4,51 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Sudoku 3x3 grid lines -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.5"
-        android:pathData="M36,28v52M72,28v52M28,36h52M28,72h52"/>
-    <!-- Filled cells -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,30h10v10h-10zM52,44h10v10h-10zM66,58h10v10h-10zM52,30h10v10h-10zM66,44h10v10h-10z"/>
+
+    <!--
+        Sudoku Pure - App Icon
+        Safe zone: 66dp circle centered at (54,54), inner 72x72 square from (18,18) to (90,90)
+        Grid: 60x60 from (24,24) to (84,84), cell = 60/9 ≈ 6.667dp
+        3x3 box lines at cell 3 and 6: x = 24+20=44, x = 24+40=64
+    -->
+
+    <!-- Outer thick border -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3.2" android:fillColor="#00000000"
+        android:pathData="M24,24h60v60h-60z"/>
+
+    <!-- 3x3 box lines (thick) -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.5"
+        android:pathData="M24,44h60 M24,64h60 M44,24v60 M64,24v60"/>
+
+    <!-- Cell lines (thin, only inside boxes for cleanliness) -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="1.0" android:strokeAlpha="0.6"
+        android:pathData="M24,30.67h20 M24,37.33h20 M44,30.67h20 M44,37.33h20 M64,30.67h20 M64,37.33h20
+                          M24,50.67h20 M24,57.33h20 M44,50.67h20 M44,57.33h20 M64,50.67h20 M64,57.33h20
+                          M24,70.67h20 M24,77.33h20 M44,70.67h20 M44,77.33h20 M64,70.67h20 M64,77.33h20
+                          M30.67,24v20 M37.33,24v20 M30.67,44v20 M37.33,44v20 M30.67,64v20 M37.33,64v20
+                          M50.67,24v20 M57.33,24v20 M50.67,44v20 M57.33,44v20 M50.67,64v20 M57.33,64v20
+                          M70.67,24v20 M77.33,24v20 M70.67,44v20 M77.33,44v20 M70.67,64v20 M77.33,64v20"/>
+
+    <!-- Filled "given" cells (white squares) - positioned inside cells with 0.7dp margin -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M24.7,24.7h5.3v5.3h-5.3z
+                          M37.7,24.7h5.3v5.3h-5.3z
+                          M57.7,24.7h5.3v5.3h-5.3z
+                          M31.3,37.7h5.3v5.3h-5.3z
+                          M71.3,44.7h5.3v5.3h-5.3z
+                          M44.7,51.3h5.3v5.3h-5.3z
+                          M78.0,51.3h5.3v5.3h-5.3z
+                          M31.3,64.7h5.3v5.3h-5.3z
+                          M51.3,71.3h5.3v5.3h-5.3z
+                          M64.7,71.3h5.3v5.3h-5.3z
+                          M71.3,78.0h5.3v5.3h-5.3z"/>
+
+    <!-- Highlighted "selected" cell (light blue) -->
+    <path android:fillColor="#64B5F6"
+        android:pathData="M64.7,37.7h5.3v5.3h-5.3z"/>
+
+    <!-- Small pencil/drawing mark in one cell (top-right corner cell) -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="1.2" android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M77,27l3,-3 M79,25l-1.5,1.5"/>
 </vector>

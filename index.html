@@ -22,6 +22,7 @@ html, body {
     height: 100%;
     overflow: hidden;
     font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg-primary);
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     user-select: none;
@@ -111,6 +112,7 @@ body {
     flex-direction: column;
     height: 100dvh;
     height: 100vh;
+    padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* ── Start Screen ── */
@@ -261,13 +263,20 @@ body {
 
 /* ── Board Area ── */
 #board-container {
-    flex: 1;
+    flex: 1 1 0%;
+    min-height: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 0 8px 4px 8px;
+    justify-content: flex-start;
+    padding: 6px 8px 4px 8px;
     overflow: hidden;
     position: relative;
+}
+
+#bottom-spacer {
+    flex: 0.5 0.5 0%;
+    min-height: 12px;
 }
 
 #board-canvas {
@@ -840,6 +849,8 @@ body {
     <button class="num-btn" id="num-9"><span class="num-main">9</span><span class="num-remain">9</span></button>
 </div>
 
+
+<div id="bottom-spacer"></div>
 <div id="dialog-overlay">
     <div class="dialog" id="dialog-difficulty">
         <h2>选择难度</h2>
@@ -3717,6 +3728,28 @@ class SudokuGame {
         return (val !== 0) ? val : 0;
     }
 }
+
+// Android back button handler
+window._onBackPressed = function() {
+    const boardVisible = document.getElementById('board-container').style.display !== 'none';
+    const levelScreen = document.getElementById('level-screen');
+    const levelVisible = levelScreen && levelScreen.style.display !== 'none';
+
+    if (boardVisible && window.game && window.game.gameStarted) {
+        window.game.goHome();
+        if (window.SudokuApp) window.SudokuApp.onBackPressed(true);
+        return 'true';
+    }
+    if (levelVisible) {
+        levelScreen.style.display = 'none';
+        var mainContent = document.querySelector('.start-content:not(#level-screen)');
+        if (mainContent) mainContent.style.display = 'block';
+        if (window.SudokuApp) window.SudokuApp.onBackPressed(true);
+        return 'true';
+    }
+    if (window.SudokuApp) window.SudokuApp.onBackPressed(false);
+    return 'false';
+};
 
 document.addEventListener("DOMContentLoaded", function() {
     window.game = new SudokuGame();

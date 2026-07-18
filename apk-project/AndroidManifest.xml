@@ -16,10 +16,15 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:hardwareAccelerated="true">
 
+        <!-- Notch / display cutout support (MIUI, EMUI, etc.) -->
+        <meta-data android:name="android.notch_support" android:value="true"/>
+        <meta-data android:name="notch.config" android:value="portrait"/>
+
         <activity
             android:name="com.sudoku.pure.MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:screenOrientation="portrait"
+            android:resizeableActivity="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

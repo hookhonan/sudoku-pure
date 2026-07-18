@@ -1,5 +1,8 @@
 apk-project/build/
+apk-project/build2/
+apk-project/build3/
 android-sdk/
 commandlinetools.zip
 *.keystore
+*.idsig
 emulator.log
