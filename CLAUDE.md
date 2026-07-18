@@ -81,4 +81,33 @@ JAVA_HOME="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.op
 - **自动保存**: 每次操作后自动保存到 localStorage，切后台时也触发保存
 - **返回键**: 游戏中按返回→回主页，主页按返回→退出（JS bridge `window._onBackPressed()`）
 - **一键笔记**: 默认禁用，需在设置中手动开启
-- **主题**: 支持亮色/暗色切换（`data-theme` 属性）
+- **主题**: 支持跟随系统/浅色/深色三种模式（`data-theme` 属性）
+  - `auto`: CSS `prefers-color-scheme` 媒体查询自动切换
+  - `light`/`dark`: 手动固定
+  - `_applyTheme()` 方法统一处理主题切换并同步状态栏颜色
+
+## 重要模式 & 教训
+
+### 继续游戏
+- `goHome()` 必须先 `_save()` 再跳转主页，否则存档丢失，继续按钮不显示
+- 存档保存在 `localStorage.sudoku_game`，含 `gameStarted: true` 标记
+
+### 响应式布局
+- 桌面 (>500px 宽): 底部 spacer `flex: 0`，九宫格自然居中
+- 手机 (≤500px 宽): 底部 spacer `flex: 0.5`，控件组上移靠近九宫格
+- 状态栏: `FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS` + JS 接口 `setStatusBarColor()` 同步背景色
+
+### 图标
+- 来源: `https://sudoku.com/img/icon-app@2x.png` (128×128 PNG)
+- Android: 各密度 mipmap PNG + mipmap-anydpi-v26 自适应图标 (PNG foreground + background)
+- 下载后存为 `icon-app.png`，用 PIL resize 到各密度
+
+### APK 构建要点
+- `d8` 和 `apksigner` 是 `.bat` 包装，直接用 `java -jar lib/d8.jar` / `java -jar lib/apksigner.jar` 更可靠
+- 构建前必须 `cp index.html → $OUTDIR/assets/`
+- `aapt2 link` 需要 res.zip 作为位置参数传入
+- 需先生成 keystore 再签名 (`keytool -genkey`)
+
+### 文档
+- `APK-ISSUES.md`: 问题记录和修复日志
+- `IMPROVEMENTS.md`: 改进方向清单（基于 sudoku.com APK 分析），含 checkbox 待用户确认
