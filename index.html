@@ -38,7 +38,7 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
-:root, [data-theme="light"] {
+:root, [data-theme="light"], [data-theme="auto"] {
     --font-scale: 1.0;
     --bg-primary: #f5f5f5;
     --bg-secondary: #ffffff;
@@ -103,6 +103,42 @@ button {
     --dialog-overlay: rgba(0,0,0,0.6);
     --diff-btn-bg: #333333;
     --diff-btn-hover: #0d47a1;
+}
+
+/* Auto theme follows system preference */
+@media (prefers-color-scheme: dark) {
+    [data-theme="auto"] {
+        --bg-primary: #121212;
+        --bg-secondary: #1e1e1e;
+        --bg-board: #1e1e1e;
+        --text-primary: #e0e0e0;
+        --text-secondary: #9e9e9e;
+        --toolbar-bg: #1e1e1e;
+        --toolbar-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        --numpad-bg: #1e1e1e;
+        --numpad-shadow: 0 -1px 3px rgba(0,0,0,0.4);
+        --num-given: #ffffff;
+        --num-user: #64b5f6;
+        --num-error: #ef5350;
+        --num-hint: #81c784;
+        --num-note: #9e9e9e;
+        --grid-line: #424242;
+        --grid-thick: #757575;
+        --highlight-related: #1a3a4a;
+        --highlight-selected: #0d47a1;
+        --highlight-same-num: #1b3a1b;
+        --selection-border: #42a5f5;
+        --btn-bg: transparent;
+        --btn-hover: #333333;
+        --btn-active: #0d47a1;
+        --btn-active-text: #64b5f6;
+        --btn-disabled: #616161;
+        --dialog-bg: #2c2c2c;
+        --dialog-text: #e0e0e0;
+        --dialog-overlay: rgba(0,0,0,0.6);
+        --diff-btn-bg: #333333;
+        --diff-btn-hover: #0d47a1;
+    }
 }
 
 body {
@@ -904,7 +940,7 @@ body {
         <h2>设置</h2>
         <div class="setting-row">
             <label for="setting-theme">主题</label>
-            <select id="setting-theme"><option value="light">浅色</option><option value="dark">深色</option></select>
+            <select id="setting-theme"><option value="auto">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select>
         </div>
         <div class="setting-row">
             <label for="setting-mute">音效</label>
@@ -2310,7 +2346,7 @@ class InputHandler {
             }
         });
         document.getElementById('setting-theme')?.addEventListener('change', (e) => {
-            document.documentElement.dataset.theme = e.target.value;
+            this.game._applyTheme(e.target.value);
             try {
                 localStorage.setItem('sudoku_theme', e.target.value);
             } catch (e) {}
@@ -2745,9 +2781,9 @@ class SudokuGame {
 
     goHome() {
         if (this.gameStarted) {
+            this._save();
             this.timer.pause();
             this.gameStarted = false;
-            Storage.clearGame();
         }
         this.dialogs.hide();
         this._showStartScreen();
@@ -2774,9 +2810,32 @@ class SudokuGame {
 
     _loadTheme() {
         try {
-            const theme = localStorage.getItem('sudoku_theme') || 'light';
-            document.documentElement.dataset.theme = theme;
+            const theme = localStorage.getItem('sudoku_theme') || 'auto';
+            this._applyTheme(theme);
         } catch (e) {}
+    }
+
+    _applyTheme(theme) {
+        document.documentElement.dataset.theme = theme;
+        this._syncStatusBar();
+        // Listen for system theme changes when in auto mode
+        if (!this._themeMediaQuery) {
+            this._themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            this._themeMediaQuery.addEventListener('change', () => {
+                if (document.documentElement.dataset.theme === 'auto') {
+                    this._render();
+                    this._syncStatusBar();
+                }
+            });
+        }
+    }
+
+    _syncStatusBar() {
+        const style = getComputedStyle(document.documentElement);
+        const bg = style.getPropertyValue('--bg-primary').trim();
+        if (window.SudokuApp && window.SudokuApp.setStatusBarColor) {
+            window.SudokuApp.setStatusBarColor(bg);
+        }
     }
 
     _loadMaxLives() {
