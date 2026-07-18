@@ -494,6 +494,10 @@ body {
     from { opacity: 0; transform: scale(0.9); }
     to { opacity: 1; transform: scale(1); }
 }
+@keyframes hintIn {
+    from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+    to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
 
 .dialog h2 {
     font-size: 1.3rem;
@@ -692,7 +696,7 @@ body {
     align-items: center;
     gap: 10px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    animation: dialogIn 0.2s ease;
+    animation: hintIn 0.2s ease;
     max-width: 94vw;
     width: auto;
     min-width: 280px;
@@ -3273,10 +3277,10 @@ class SudokuGame {
         // Build specific explanation
         const explanation = this._buildHintReason(r, c, answer);
 
-        // Defer hint consumption until "apply" - must set _pendingHint AFTER selectCell
         this._hideSmartHint();
         this.selectCell(r, c);
         this._pendingHint = { r, c, answer, explanation };
+        this.hints.use();
         this._showSmartHint(answer, explanation, r, c);
         this.sound.play('prop_notice');
         this._render();
@@ -3333,8 +3337,6 @@ class SudokuGame {
         if (!this._pendingHint) return;
         const { r, c, answer } = this._pendingHint;
         this._pendingHint = null;
-
-        this.hints.use();
 
         const oldVal = this.board.getCell(r, c);
         const oldNotes = new Set(this.board.getNotes(r, c));
