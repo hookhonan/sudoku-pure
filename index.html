@@ -3343,6 +3343,7 @@ class SudokuGame {
 
         this.board.setCell(r, c, answer);
         this.board.notes[r][c].clear();
+        this._removeRelatedNotes(answer, r, c);
 
         this.history.push({
             type: ActionType.HINT,
