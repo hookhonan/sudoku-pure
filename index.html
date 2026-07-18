@@ -263,25 +263,23 @@ body {
 
 /* ── Board Area ── */
 #board-container {
-    flex: 1 1 0%;
-    min-height: 0;
+    flex: 1;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding: 6px 8px 4px 8px;
+    justify-content: center;
+    padding: 0 8px 4px 8px;
     overflow: hidden;
     position: relative;
-}
-
-#bottom-spacer {
-    flex: 0.5 0.5 0%;
-    min-height: 12px;
 }
 
 #board-canvas {
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#bottom-spacer {
+    flex: 0.5 0.5 0%;
+    min-height: 0;
 }
 
 /* ── Tool Bar ── */
@@ -849,8 +847,8 @@ body {
     <button class="num-btn" id="num-9"><span class="num-main">9</span><span class="num-remain">9</span></button>
 </div>
 
-
 <div id="bottom-spacer"></div>
+
 <div id="dialog-overlay">
     <div class="dialog" id="dialog-difficulty">
         <h2>选择难度</h2>
@@ -3731,9 +3729,9 @@ class SudokuGame {
 
 // Android back button handler
 window._onBackPressed = function() {
-    const boardVisible = document.getElementById('board-container').style.display !== 'none';
-    const levelScreen = document.getElementById('level-screen');
-    const levelVisible = levelScreen && levelScreen.style.display !== 'none';
+    var boardVisible = document.getElementById('board-container').style.display !== 'none';
+    var levelScreen = document.getElementById('level-screen');
+    var levelVisible = levelScreen && levelScreen.style.display !== 'none';
 
     if (boardVisible && window.game && window.game.gameStarted) {
         window.game.goHome();
@@ -3750,6 +3748,18 @@ window._onBackPressed = function() {
     if (window.SudokuApp) window.SudokuApp.onBackPressed(false);
     return 'false';
 };
+
+// Save game when app is backgrounded (Android WebView)
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden && window.game && window.game.gameStarted && !window.game.completed) {
+        window.game._save();
+    }
+});
+window.addEventListener('pagehide', function() {
+    if (window.game && window.game.gameStarted && !window.game.completed) {
+        window.game._save();
+    }
+});
 
 document.addEventListener("DOMContentLoaded", function() {
     window.game = new SudokuGame();
