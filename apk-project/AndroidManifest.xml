@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.sudoku.pure"
     android:versionCode="1"
-    android:versionName="1.0">
+    android:versionName="1.1">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34"/>
 
@@ -15,10 +15,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:hardwareAccelerated="true">
-
-        <!-- Notch / display cutout support (MIUI, EMUI, etc.) -->
-        <meta-data android:name="android.notch_support" android:value="true"/>
-        <meta-data android:name="notch.config" android:value="portrait"/>
 
         <activity
             android:name="com.sudoku.pure.MainActivity"

@@ -1,7 +1,6 @@
 package com.sudoku.pure;
 
 import android.app.Activity;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
@@ -28,21 +27,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        );
+        // Show status bar, hide navigation bar only
         getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         );
-
-        // Allow drawing in display cutout area (notch phones)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            getWindow().setAttributes(lp);
-        }
 
         // Use FrameLayout to ensure WebView fills the entire screen
         FrameLayout layout = new FrameLayout(this);
@@ -79,12 +67,9 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         backHandledByJS = false;
-        // Ask the WebView if it handled the back press (e.g. going to start screen)
         webView.evaluateJavascript("javascript:window._onBackPressed&&window._onBackPressed()", null);
-        // Re-read via JS interface callback (async, so we post a delayed check)
         webView.postDelayed(() -> {
             if (!backHandledByJS) {
-                // JS didn't handle it - exit the app
                 finish();
             }
         }, 150);

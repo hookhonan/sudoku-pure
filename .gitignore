@@ -1,6 +1,4 @@
-apk-project/build/
-apk-project/build2/
-apk-project/build3/
+apk-project/build*/
 android-sdk/
 commandlinetools.zip
 *.keystore

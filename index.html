@@ -112,7 +112,6 @@ body {
     flex-direction: column;
     height: 100dvh;
     height: 100vh;
-    padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* ── Start Screen ── */
@@ -278,8 +277,15 @@ body {
 }
 
 #bottom-spacer {
-    flex: 0.5 0.5 0%;
+    flex: 0 0 0%;
     min-height: 0;
+}
+
+/* Mobile: push controls up so they sit close to the board */
+@media (max-width: 500px) {
+    #bottom-spacer {
+        flex: 0.5 0.5 0%;
+    }
 }
 
 /* ── Tool Bar ── */
