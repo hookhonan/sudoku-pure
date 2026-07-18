@@ -871,8 +871,11 @@ body {
         <div id="victory-difficulty"></div>
         <div id="victory-time">00:00</div>
         <div id="victory-best" style="display:none">新纪录！</div>
-        <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-victory-new">更换难度</button></div>
-        <div class="dialog-btn-row"><button class="dialog-btn secondary" id="btn-victory-replay">再来一局</button></div>
+        <div class="dialog-btn-row victory-level-only" style="display:none"><button class="dialog-btn primary" id="btn-victory-next">下一关</button></div>
+        <div class="dialog-btn-row victory-random-only"><button class="dialog-btn primary" id="btn-victory-new">更换难度</button></div>
+        <div class="dialog-btn-row victory-level-only" style="display:none"><button class="dialog-btn secondary" id="btn-victory-restart">重新开始</button></div>
+        <div class="dialog-btn-row victory-random-only"><button class="dialog-btn secondary" id="btn-victory-replay">再来一局</button></div>
+        <div class="dialog-btn-row victory-level-only" style="display:none"><button class="dialog-btn secondary" id="btn-victory-home">主页</button></div>
     </div>
     <div class="dialog" id="dialog-confirm">
         <h2 id="confirm-title"></h2>
@@ -2102,10 +2105,13 @@ class Dialogs {
         document.querySelectorAll('.dialog').forEach(d => d.classList.remove('active'));
     }
 
-    showVictory(timeStr, difficulty, isNewBest) {
+    showVictory(timeStr, difficulty, isNewBest, gameMode) {
         document.getElementById('victory-time').textContent = timeStr;
         document.getElementById('victory-difficulty').textContent = difficulty;
         document.getElementById('victory-best').style.display = isNewBest ? 'block' : 'none';
+        const isLevel = gameMode === 'level';
+        document.querySelectorAll('.victory-level-only').forEach(el => el.style.display = isLevel ? '' : 'none');
+        document.querySelectorAll('.victory-random-only').forEach(el => el.style.display = isLevel ? 'none' : '');
         this.show('dialog-victory');
     }
 
@@ -2317,17 +2323,27 @@ class InputHandler {
         document.getElementById('confirm-cancel')?.addEventListener('click', () => this.game.dialogs.hide());
 
         // Victory actions
+        document.getElementById('btn-victory-next')?.addEventListener('click', () => {
+            this.game.dialogs.hide();
+            this.game.startGame(this.game.difficulty, 'level', this.game.currentLevel + 1);
+        });
+        document.getElementById('btn-victory-restart')?.addEventListener('click', () => {
+            this.game.dialogs.hide();
+            this.game.restartGame();
+        });
+        document.getElementById('btn-victory-home')?.addEventListener('click', () => {
+            this.game.dialogs.hide();
+            Storage.clearGame();
+            this.game.gameStarted = false;
+            this.game._showStartScreen();
+        });
         document.getElementById('btn-victory-new')?.addEventListener('click', () => {
             this.game.dialogs.hide();
             this.game._showStartScreen();
         });
         document.getElementById('btn-victory-replay')?.addEventListener('click', () => {
             this.game.dialogs.hide();
-            if (this.game.gameMode === 'level') {
-                this.game.restartGame();
-            } else {
-                this.game.startGame(this.game.difficulty, 'random');
-            }
+            this.game.startGame(this.game.difficulty, 'random');
         });
     }
 
@@ -3568,7 +3584,7 @@ class SudokuGame {
 
             setTimeout(() => {
                 this.sound.play('over_success');
-                this.dialogs.showVictory(timeStr, diffLabel, isNewBest);
+                this.dialogs.showVictory(timeStr, diffLabel, isNewBest, this.gameMode);
                 Animations.celebrate(this.renderer.canvas);
             }, 600);
 
