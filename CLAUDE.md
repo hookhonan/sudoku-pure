@@ -9,9 +9,19 @@
 - 忽略 build 目录（已在 .gitignore 中）
 
 ### 文件编辑
-- `index.html` 使用 **CRLF** 换行符（Windows 格式）
-- Edit 工具经常因 CRLF 匹配失败，**优先使用 Python 脚本进行文本替换**
-- 示例：`python -c "with open('index.html','r',encoding='utf-8') as f: content=f.read(); content=content.replace(old,new); ..."`
+- `index.html` 使用 **LF** 换行符（非 CRLF），已由 `.gitattributes` 锁定
+- **Edit 工具不可用于 index.html** — 文件内混合使用 Tab 和空格缩进，Read 输出带行号前缀后无法准确还原原始字符串，每次都匹配失败
+- **必须用 Python 脚本编辑 index.html**，这是唯一可靠的方式：
+  ```python
+  # 读取、替换、写回（保持 newline='' 不变更换行符）
+  with open('index.html', 'r', encoding='utf-8') as f:
+      content = f.read()
+  content = content.replace(old_string, new_string)
+  if content.count(old_string) == 1:  # 验证唯一匹配
+      with open('index.html', 'w', encoding='utf-8', newline='') as f:
+          f.write(content)
+  ```
+- 小文件（.java, .xml, .md）可以用 Edit 工具
 
 ### 不需要的注释和行为
 - 不写注释，除非 WHY 不明显
