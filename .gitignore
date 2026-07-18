@@ -2,4 +2,4 @@ apk-project/build/
 android-sdk/
 commandlinetools.zip
 *.keystore
-apk-project/
+emulator.log
