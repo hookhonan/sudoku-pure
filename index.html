@@ -359,6 +359,41 @@ body {
     opacity: 0.35;
     pointer-events: none;
 }
+.action-btn.auto-note-disabled {
+    opacity: 0.4;
+}
+.auto-note-tooltip {
+    position: fixed;
+    background: var(--dialog-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--num-user);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    z-index: 300;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    pointer-events: none;
+    animation: dialogIn 0.15s ease;
+}
+.pause-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--btn-hover);
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pause-close-btn:active { transform: scale(0.9); }
 
 #btn-hint { position: relative; }
 #hint-count {
@@ -451,6 +486,7 @@ body {
     display: flex;
 }
 .pause-panel {
+    position: relative;
     background: var(--dialog-bg);
     color: var(--dialog-text);
     border-radius: 16px;
@@ -889,6 +925,7 @@ body {
 <div id="board-container" style="display:none">
     <div id="pause-overlay">
         <div class="pause-panel">
+            <button class="pause-close-btn" id="btn-pause-close">×</button>
             <h2>暂停</h2>
             <div class="pause-btn-row"><button class="dialog-btn primary" id="btn-resume">继续游戏</button></div>
             <div class="pause-btn-row"><button class="dialog-btn secondary" id="btn-restart">重新开始</button></div>
@@ -2330,6 +2367,7 @@ class InputHandler {
 
         // Pause actions
         document.getElementById('btn-resume')?.addEventListener('click', () => this.game.resume());
+        document.getElementById('btn-pause-close')?.addEventListener('click', () => this.game.resume());
         document.getElementById('btn-gameover-retry')?.addEventListener('click', () => {
             this.game.dialogs.hide();
             if (this.game.gameMode === 'level') {
@@ -3435,6 +3473,8 @@ class SudokuGame {
         this.noteMode = false;
         this.paused = false;
         this.completed = false;
+        document.getElementById('pause-overlay').classList.remove('active');
+        this.dialogs.hide();
         this.hintCell = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
@@ -3676,7 +3716,7 @@ class SudokuGame {
         const rect = btn.getBoundingClientRect();
         const tooltip = document.createElement('div');
         tooltip.className = 'auto-note-tooltip';
-        tooltip.textContent = '需在设置中启用';
+        tooltip.textContent = '请在设置中开启一键笔记功能';
         tooltip.style.left = (rect.left + rect.width / 2) + 'px';
         tooltip.style.top = (rect.top - 10) + 'px';
         tooltip.style.transform = 'translate(-50%, -100%)';
@@ -3844,6 +3884,12 @@ window._onBackPressed = function() {
     var levelVisible = levelScreen && levelScreen.style.display !== 'none';
 
     if (boardVisible && window.game && window.game.gameStarted) {
+        var pauseOverlay = document.getElementById('pause-overlay');
+        if (pauseOverlay && pauseOverlay.classList.contains('active')) {
+            window.game.resume();
+            if (window.SudokuApp) window.SudokuApp.onBackPressed(true);
+            return 'true';
+        }
         window.game.goHome();
         if (window.SudokuApp) window.SudokuApp.onBackPressed(true);
         return 'true';
