@@ -345,6 +345,16 @@ body {
 }
 .nav-item.active { color: var(--num-user); font-weight: 700; }
 .nav-icon { font-size: 1.25rem; }
+@media (min-width: 501px) {
+    #bottom-nav {
+        max-width: 380px;
+        width: 100%;
+        margin: 0 auto;
+        border-left: 1px solid var(--grid-line);
+        border-right: 1px solid var(--grid-line);
+        border-radius: 12px 12px 0 0;
+    }
+}
 
 /* ── Top Navigation ── */
 #top-nav {
