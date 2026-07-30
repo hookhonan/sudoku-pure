@@ -3830,6 +3830,7 @@ class SudokuGame {
         document.getElementById('toolbar-actions').style.display = 'none';
         document.getElementById('numpad').style.display = 'none';
         document.getElementById('board-container').style.display = 'none';
+        document.getElementById('bottom-spacer').style.display = 'none';
         document.getElementById('start-screen').style.display = 'flex';
         this._showTab(this._activeTab || 'home');
     }
@@ -3846,6 +3847,7 @@ class SudokuGame {
 
     _hideStartScreen() {
         document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('bottom-spacer').style.display = 'block';
         document.getElementById('board-container').style.display = 'flex';
         document.getElementById('top-nav').style.display = 'flex';
         document.getElementById('info-bar').style.display = 'flex';
