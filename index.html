@@ -1189,6 +1189,12 @@ body {
         <div class="dialog-btn-row victory-random-only"><button class="dialog-btn secondary" id="btn-victory-replay">再来一局</button></div>
         <div class="dialog-btn-row victory-level-only" style="display:none"><button class="dialog-btn secondary" id="btn-victory-home">主页</button></div>
     </div>
+    <div class="dialog" id="dialog-level-info">
+        <h2 id="level-info-title"></h2>
+        <div id="level-info-body" style="margin-bottom:12px"></div>
+        <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-level-info-play">再次挑战</button></div>
+        <div class="dialog-btn-row"><button class="dialog-btn secondary" id="btn-level-info-close">返回</button></div>
+    </div>
     <div class="dialog" id="dialog-confirm">
         <h2 id="confirm-title"></h2>
         <p id="confirm-message"></p>
@@ -2459,9 +2465,9 @@ class LevelManager {
         let stars = 1;
         if (timeSeconds < 300) stars = 3;
         else if (timeSeconds < 600) stars = 2;
-        this.progress[key] = { completed: true, bestTime, stars, lastTime: timeSeconds };
+        this.progress[key] = { completed: true, bestTime, stars, lastTime: timeSeconds, plays: (old.plays || 0) + 1 };
         this.save();
-        return { bestTime, stars, isNewBest: !old.bestTime || timeSeconds < old.bestTime };
+        return { bestTime, stars, isNewBest: !!old.bestTime && timeSeconds < old.bestTime };
     }
 
     getBestTime(difficulty, level) {
@@ -2472,6 +2478,10 @@ class LevelManager {
     getStars(difficulty, level) {
         const key = difficulty + '_' + level;
         return this.progress[key] ? this.progress[key].stars : 0;
+    }
+
+    getRecord(difficulty, level) {
+        return this.progress[difficulty + '_' + level] || null;
     }
 
     // Highest visible level: 99, extends by 100 each time the current max is beaten
@@ -3338,6 +3348,7 @@ class Stats {
             bestTimes: {},    // { difficulty: seconds }
             avgTimes: {},     // { difficulty: { total: seconds, count: N } }
             byDifficulty: {}, // { difficulty: { played: N, won: N } }
+            history: [],      // recent random-mode wins: { difficulty, timeSec, ts, p, s }
         };
     }
 
@@ -3356,7 +3367,7 @@ class Stats {
         } catch (e) {}
     }
 
-    recordGame(difficulty, won, timeSeconds) {
+    recordGame(difficulty, won, timeSeconds, extra) {
         const d = this.data;
         d.totalGames++;
 
@@ -3384,6 +3395,18 @@ class Stats {
             d.avgTimes[difficulty].count++;
         } else {
             d.currentStreak = 0;
+        }
+
+        // History log for random-mode wins (replayable: stores the puzzle)
+        if (won && extra && extra.mode === 'random' && extra.p) {
+            d.history.unshift({
+                difficulty,
+                timeSec: timeSeconds,
+                ts: Date.now(),
+                p: extra.p,
+                s: extra.s,
+            });
+            d.history = d.history.slice(0, 30);
         }
         this.save();
     }
@@ -3612,7 +3635,11 @@ class SudokuGame {
 
             if (unlocked) {
                 btn.addEventListener('click', () => {
-                    this.startGame(difficulty, 'level', i);
+                    if (completed) {
+                        this._showLevelInfo(difficulty, i);
+                    } else {
+                        this.startGame(difficulty, 'level', i);
+                    }
                 });
             }
             grid.appendChild(btn);
@@ -3624,6 +3651,27 @@ class SudokuGame {
                         grid.querySelectorAll('.level-btn.completed')[grid.querySelectorAll('.level-btn.completed').length - 1];
             if (cur) cur.scrollIntoView({ block: 'center' });
         }, 50);
+    }
+
+    _showLevelInfo(difficulty, level) {
+        const rec = this.levelManager.getRecord(difficulty, level);
+        const cfg = Generator.DIFFICULTY[difficulty];
+        document.getElementById('level-info-title').textContent = cfg.label + ' · 第 ' + level + ' 关';
+        const fmt = (sec) => {
+            if (sec == null) return '--';
+            return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+        };
+        let html = '<div class="stat-row"><span class="stat-label">最佳时间</span><span>' + fmt(rec && rec.bestTime) + '</span></div>';
+        html += '<div class="stat-row"><span class="stat-label">最近用时</span><span>' + fmt(rec && rec.lastTime) + '</span></div>';
+        html += '<div class="stat-row"><span class="stat-label">星级</span><span style="color:#f59e0b">' + '★'.repeat(rec ? rec.stars : 0) + '</span></div>';
+        html += '<div class="stat-row"><span class="stat-label">挑战次数</span><span>' + (rec && rec.plays ? rec.plays : 1) + ' 次</span></div>';
+        document.getElementById('level-info-body').innerHTML = html;
+        document.getElementById('btn-level-info-play').onclick = () => {
+            this.dialogs.hide();
+            this.startGame(difficulty, 'level', level);
+        };
+        document.getElementById('btn-level-info-close').onclick = () => this.dialogs.hide();
+        this.dialogs.show('dialog-level-info');
     }
 
     _showTab(tab) {
@@ -3748,7 +3796,32 @@ class SudokuGame {
             html += '<div class="stat-row"><span class="stat-label">' + cfg.label + '</span><span>' +
                 fmt(best) + ' · ' + rate + ' · ' + levelsDone + '关</span></div>';
         }
+
+        if (s.history && s.history.length) {
+            html += '<div class="stat-section">最近通关 · 随机（点击重玩该题）</div>';
+            const fmtDate = (ts) => {
+                const dd = new Date(ts);
+                return (dd.getMonth() + 1) + '月' + dd.getDate() + '日 ' +
+                    String(dd.getHours()).padStart(2, '0') + ':' + String(dd.getMinutes()).padStart(2, '0');
+            };
+            const fmtT = (sec) => String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+            s.history.slice(0, 10).forEach((h, idx) => {
+                html += '<div class="stat-row history-row" data-idx="' + idx + '" style="cursor:pointer">' +
+                    '<span class="stat-label">' + Generator.DIFFICULTY[h.difficulty].label + ' · ' + fmtDate(h.ts) + '</span>' +
+                    '<span>' + fmtT(h.timeSec) + ' ↻</span></div>';
+            });
+        }
         el.innerHTML = html;
+
+        el.querySelectorAll('.history-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const h = s.history[parseInt(row.dataset.idx, 10)];
+                if (!h) return;
+                this.dialogs.showConfirm('重新挑战', '以相同的题目重新挑战这一局？', () => {
+                    this.startGame(h.difficulty, 'random', 1, { p: h.p, s: h.s });
+                });
+            });
+        });
     }
 
     _showStartScreen() {
@@ -3921,7 +3994,7 @@ class SudokuGame {
         this.startGame(info.difficulty, 'daily', 0);
     }
 
-    startGame(difficulty, mode, level) {
+    startGame(difficulty, mode, level, puzzleOverride) {
         this.difficulty = difficulty;
         this.gameMode = mode || 'random';
         this.currentLevel = level || 1;
@@ -3933,6 +4006,10 @@ class SudokuGame {
             solution = data.solution;
         } else if (this.gameMode === 'daily') {
             const data = this.dailyManager.getPuzzle(this.dailyDateKey);
+            puzzle = data.puzzle;
+            solution = data.solution;
+        } else if (puzzleOverride) {
+            const data = this.levelManager._parse(puzzleOverride.p, puzzleOverride.s);
             puzzle = data.puzzle;
             solution = data.solution;
         } else {
@@ -4641,16 +4718,26 @@ class SudokuGame {
             const timeStr = this.timer.getFormatted();
 
             const diffLabel = Generator.DIFFICULTY[this.difficulty].label;
-            const isNewBest = this.stats.isNewBest(this.difficulty, timeSec);
+            let isNewBest;
 
-            this.stats.recordGame(this.difficulty, true, timeSec);
-
-            // Record level completion
+            // Record completion per mode; isNewBest = beaten a previous record
             if (this.gameMode === 'level') {
-                this.levelManager.completeLevel(this.difficulty, this.currentLevel, timeSec);
+                const r = this.levelManager.completeLevel(this.difficulty, this.currentLevel, timeSec);
+                isNewBest = r.isNewBest;
             } else if (this.gameMode === 'daily') {
+                const prevBest = this.dailyManager.getInfo(this.dailyDateKey).bestTime;
                 this.dailyManager.complete(this.dailyDateKey, timeSec);
+                isNewBest = prevBest != null && timeSec < prevBest;
+            } else {
+                isNewBest = this.stats.isNewBest(this.difficulty, timeSec);
             }
+
+            this.stats.recordGame(this.difficulty, true, timeSec, {
+                mode: this.gameMode,
+                level: this.currentLevel,
+                p: this.board.initialPuzzle.map(row => row.join('')).join(''),
+                s: this.board.solution.map(row => row.join('')).join(''),
+            });
 
             setTimeout(() => {
                 this.sound.play('over_success');
