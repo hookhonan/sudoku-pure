@@ -1143,7 +1143,7 @@ body {
     <button class="action-btn" id="btn-undo"><span class="icon">↩</span><span>撤销</span></button>
     <button class="action-btn" id="btn-erase"><span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="14" height="10" rx="1.5" transform="rotate(-15 10 12)"/><line x1="7" y1="16" x2="18" y2="6"/></svg></span><span>擦除</span></button>
     <button class="action-btn" id="btn-note"><span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span><span>笔记</span></button>
-    <button class="action-btn" id="btn-autonote"><span class="icon">✍</span><span>一键笔记</span></button>
+    <button class="action-btn" id="btn-autonote"><span class="icon" id="btn-autonote-icon">✍</span><span id="btn-autonote-text">一键笔记</span></button>
     <button class="action-btn" id="btn-hint"><span class="icon">💡</span><span>提示</span><span id="hint-count">3</span></button>
 </div>
 
@@ -2306,6 +2306,19 @@ class Board {
         return count;
     }
 
+    clearAllNotes() {
+        let count = 0;
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if (this.notes[r][c].size > 0) {
+                    this.notes[r][c].clear();
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
     removeNoteFromRelated(num, row, col) {
         let removed = 0;
         for (let i = 0; i < 9; i++) {
@@ -2623,11 +2636,13 @@ class Hints {
     constructor() {
         this.remaining = 3;
         this.autoNoteUsed = false;
+        this.autoNoteCleared = false;
     }
 
     reset() {
         this.remaining = 3;
         this.autoNoteUsed = false;
+        this.autoNoteCleared = false;
     }
 
     use() {
@@ -4079,6 +4094,7 @@ class SudokuGame {
         this.selectedCol = saved.selectedCol;
         this.hints.remaining = saved.hintRemaining ?? 3;
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
+        this.hints.autoNoteCleared = saved.autoNoteCleared ?? false;
         this.lives = saved.lives ?? this.maxLives;
         this.maxLives = saved.maxLives ?? 3;
         this.autoNoteEnabled = saved.autoNoteEnabled ?? false;
@@ -4442,15 +4458,27 @@ class SudokuGame {
 
     autoNote() {
         if (this.paused || this.completed) return;
+        const btn = document.getElementById('btn-autonote');
         if (!this.autoNoteEnabled) {
             this.sound.play('num_error');
-            this._shakeElement(document.getElementById('btn-autonote'));
+            this._shakeElement(btn);
             this._showAutoNoteTooltip();
             return;
         }
-        if (!this.hints.canUseAutoNote()) {
+        if (this.hints.autoNoteUsed && this.hints.autoNoteCleared) {
             this.sound.play('num_error');
-            this._shakeElement(document.getElementById('btn-autonote'));
+            this._shakeElement(btn);
+            this._showAutoNoteUsedTooltip();
+            return;
+        }
+        if (this.hints.autoNoteUsed && !this.hints.autoNoteCleared) {
+            this.board.clearAllNotes();
+            this.hints.autoNoteCleared = true;
+            this.sound.play('eraserecall');
+            this._updateAutoNoteButton();
+            this._updateNumPadHighlight();
+            this._render();
+            this._save();
             return;
         }
         this.hints.useAutoNote();
@@ -4696,16 +4724,27 @@ class SudokuGame {
 
     _updateAutoNoteButton() {
         const btn = document.getElementById('btn-autonote');
-        if (btn) {
-            if (!this.autoNoteEnabled) {
-                btn.classList.add('auto-note-disabled');
-                btn.classList.remove('disabled');
-            } else if (this.hints.canUseAutoNote()) {
-                btn.classList.remove('disabled', 'auto-note-disabled');
-            } else {
-                btn.classList.add('disabled');
-                btn.classList.remove('auto-note-disabled');
-            }
+        const icon = document.getElementById('btn-autonote-icon');
+        const text = document.getElementById('btn-autonote-text');
+        if (!btn) return;
+        if (!this.autoNoteEnabled) {
+            btn.classList.add('auto-note-disabled');
+            btn.classList.remove('disabled');
+            if (icon) icon.textContent = '✍';
+            if (text) text.textContent = '一键笔记';
+        } else if (this.hints.autoNoteUsed && !this.hints.autoNoteCleared) {
+            btn.classList.remove('disabled', 'auto-note-disabled');
+            if (icon) icon.textContent = '🧹';
+            if (text) text.textContent = '一键擦除';
+        } else if (this.hints.autoNoteUsed && this.hints.autoNoteCleared) {
+            btn.classList.add('disabled');
+            btn.classList.remove('auto-note-disabled');
+            if (icon) icon.textContent = '✍';
+            if (text) text.textContent = '一键笔记';
+        } else {
+            btn.classList.remove('disabled', 'auto-note-disabled');
+            if (icon) icon.textContent = '✍';
+            if (text) text.textContent = '一键笔记';
         }
     }
 
@@ -4716,6 +4755,20 @@ class SudokuGame {
         const tooltip = document.createElement('div');
         tooltip.className = 'auto-note-tooltip';
         tooltip.textContent = '请在设置中开启一键笔记功能';
+        tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - 10) + 'px';
+        tooltip.style.transform = 'translate(-50%, -100%)';
+        document.body.appendChild(tooltip);
+        setTimeout(() => tooltip.remove(), 1000);
+    }
+
+    _showAutoNoteUsedTooltip() {
+        const btn = document.getElementById('btn-autonote');
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const tooltip = document.createElement('div');
+        tooltip.className = 'auto-note-tooltip';
+        tooltip.textContent = '每局仅可使用一次';
         tooltip.style.left = (rect.left + rect.width / 2) + 'px';
         tooltip.style.top = (rect.top - 10) + 'px';
         tooltip.style.transform = 'translate(-50%, -100%)';
@@ -4833,6 +4886,7 @@ class SudokuGame {
             dailyDateKey: this.dailyDateKey,
             hintRemaining: this.hints.remaining,
             autoNoteUsed: this.hints.autoNoteUsed,
+            autoNoteCleared: this.hints.autoNoteCleared,
             lives: this.lives,
             maxLives: this.maxLives,
             autoNoteEnabled: this.autoNoteEnabled,
