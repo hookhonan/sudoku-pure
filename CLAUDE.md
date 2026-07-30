@@ -78,15 +78,19 @@ JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjd
 
 ## 游戏关键设计
 
-- **闯关模式**: 120 个预置关卡（`LEVEL_PUZZLES` 常量），4 个难度 × 30 关
-- **难度**: easy/medium/hard/expert，通过 naked-single 比例分级
+- **主页结构**: 底部4Tab（主页/当日挑战/选关/战绩统计）+ 关卡网格页，`_showTab()` 切换
+- **关卡模式**: 无尽关卡，每难度内置99关（`LEVEL_PACK`），100关以后种子确定性生成
+  - 渐进解锁：顺序过关解锁下一关；过99关显示到199，过199显示到299
+  - `LevelManager.getDisplayedMax()` / `getPuzzle()` 是核心入口
+- **难度**: 6档 easy/medium/hard/expert/master/extreme（简单/中等/困难/专家/大师/极限）
+- **每日挑战**: 按星期轮换难度（周一easy→周日extreme），`DailyManager` 管理，种子按日期 `daily_YYYY-MM-DD`
 - **自动保存**: 每次操作后自动保存到 localStorage，切后台时也触发保存
-- **返回键**: 游戏中按返回→回主页，主页按返回→退出（JS bridge `window._onBackPressed()`）
-- **一键笔记**: 默认禁用，需在设置中手动开启
+- **返回键**: 游戏中→主页，暂停中→关闭暂停，关卡页→选关Tab，其他Tab→主页Tab，主页→退出
 - **主题**: 支持跟随系统/浅色/深色三种模式（`data-theme` 属性）
-  - `auto`: CSS `prefers-color-scheme` 媒体查询自动切换
-  - `light`/`dark`: 手动固定
   - `_applyTheme()` 方法统一处理主题切换并同步状态栏颜色
+- **工具脚本**:
+  - `gen_levels.js`: Node 重新生成内置题库（输出 level_pack.js，需手动嵌入 index.html 替换 LEVEL_PACK）
+  - `gen_icon.py`: 重新生成全部图标资源（矢量 XML + 各密度 PNG）
 
 ## 重要模式 & 教训
 
@@ -100,9 +104,8 @@ JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjd
 - 状态栏: `FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS` + JS 接口 `setStatusBarColor()` 同步背景色
 
 ### 图标
-- 来源: `https://sudoku.com/img/icon-app@2x.png` (128×128 PNG)
-- Android: 各密度 mipmap PNG + mipmap-anydpi-v26 自适应图标 (PNG foreground + background)
-- 下载后存为 `icon-app.png`，用 PIL resize 到各密度
+- 原创设计：靛蓝渐变背景 + 3×3 圆角马赛克（四角白、边半透明、中心琥珀色）
+- 自适应图标用 vector drawable（`res/drawable/ic_launcher_*.xml`），各密度 PNG 由 `gen_icon.py` 渲染
 
 ### APK 构建要点
 - `d8` 和 `apksigner` 是 `.bat` 包装，bash 环境下直接用 `java -cp lib/d8.jar com.android.tools.r8.D8` 更可靠
