@@ -71,7 +71,17 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
 
         webView.addJavascriptInterface(new SudokuJSInterface(), "SudokuApp");
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                if (webView != null) {
+                    webView.destroy();
+                    webView = null;
+                }
+                recreate();
+                return true;
+            }
+        });
         webView.setWebChromeClient(new WebChromeClient());
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
