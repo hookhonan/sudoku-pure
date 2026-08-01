@@ -1672,14 +1672,18 @@ class HintEngine {
                     //         否则列的列在目标宫列范围 → 沿列约束，带该列。
                     // 带线规则（所有单位统一）：原因格的行经过目标宫（目标格所在宫的行范围）
                     // → 带该行（该4沿行约束目标宫）；否则列的列经过目标宫列范围 → 带该列；
-                    // 行和列都不经过目标宫 → 不亮。目标格所在的行/列一律不高亮。
+                    // 行和列都不经过目标宫 → 该原因格本身也不高亮（线不亮、格不亮）。
+                    // 目标格所在的行/列一律不主动高亮。
                     const lines = [];
+                    const litSources = [];
                     const ubr = Math.floor(hs.r / 3) * 3, ubc = Math.floor(hs.c / 3) * 3;
                     for (const [br2, bc2] of sources) {
-                        let type, idx;
-                        if (br2 >= ubr && br2 < ubr + 3) { type = 'row'; idx = br2; }
-                        else if (bc2 >= ubc && bc2 < ubc + 3) { type = 'col'; idx = bc2; }
-                        else continue;
+                        const rowInBox = br2 >= ubr && br2 < ubr + 3;
+                        const colInBox = bc2 >= ubc && bc2 < ubc + 3;
+                        if (!rowInBox && !colInBox) continue;
+                        litSources.push([br2, bc2]);
+                        const type = rowInBox ? 'row' : 'col';
+                        const idx = rowInBox ? br2 : bc2;
                         if (type === 'row' && idx === hs.r) continue;
                         if (type === 'col' && idx === hs.c) continue;
                         if (!lines.some(l => l.type === type && l.index === idx)) lines.push({ type, index: idx });
@@ -1702,7 +1706,7 @@ class HintEngine {
                     stepList.push({
                         text: '【唯余法】' + unitDesc + '中，除' + this._cellName(hs.r, hs.c) + '外，其他空格都被数字 ' + hs.digit + ' 排除，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit,
                         lines,
-                        fillCells: sources,
+                        fillCells: litSources,
                         boxFrame: this._boxIndex(hs.r, hs.c),
                         dimCells,
                         target: [hs.r, hs.c],
