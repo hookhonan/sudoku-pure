@@ -395,6 +395,9 @@ body {
 
 .timer-icon {
     font-size: 1rem;
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
 }
 
 
@@ -429,7 +432,9 @@ body {
     background: var(--btn-bg);
     transition: background 0.15s;
 }
-.tool-btn:hover { background: var(--btn-hover); }
+@media (hover: hover) and (pointer: fine) {
+    .tool-btn:hover { background: var(--btn-hover); }
+}
 .tool-btn:active { background: var(--btn-active); }
 
 /* ── Board Area ── */
@@ -443,8 +448,8 @@ body {
 }
 
 #board-canvas {
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }
 
 #bottom-spacer {
@@ -471,25 +476,30 @@ body {
 }
 
 .action-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
+    width: 56px;
+    height: 52px;
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     font-size: 0.7rem;
     color: var(--text-secondary);
-    background: var(--btn-bg);
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--grid-line);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     transition: all 0.15s;
-    gap: 1px;
+    gap: 2px;
 }
 .action-btn .icon { font-size: 1.2rem; }
-.action-btn:hover { background: var(--btn-hover); }
-.action-btn:active { background: var(--btn-active); }
+@media (hover: hover) and (pointer: fine) {
+    .action-btn:hover { background: var(--btn-hover); border-color: var(--num-user); }
+}
+.action-btn:active { background: var(--btn-active); transform: scale(0.94); }
 .action-btn.active {
     color: var(--btn-active-text);
     background: var(--btn-active);
+    border-color: var(--num-user);
 }
 .action-btn.disabled {
     opacity: 0.35;
@@ -563,14 +573,17 @@ body {
     gap: 4px;
     width: calc(100% - 12px);
     height: 56px;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1.5px solid var(--grid-line);
     color: var(--text-primary);
     background: var(--bg-secondary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     transition: all 0.12s;
     padding: 4px 2px;
 }
-.num-btn:hover { background: var(--btn-hover); border-color: var(--num-user); }
+@media (hover: hover) and (pointer: fine) {
+    .num-btn:hover { background: var(--btn-hover); border-color: var(--num-user); }
+}
 .num-btn:active {
     background: var(--btn-active);
     transform: scale(0.93);
@@ -813,7 +826,6 @@ body {
     #info-bar { padding: 1px 14px; }
     .num-btn .num-main { font-size: 1.5rem; }
     #toolbar-actions { gap: 8px; padding: 4px 16px; }
-    .action-btn { width: 48px; height: 48px; }
 }
 
 
@@ -879,6 +891,8 @@ body {
     line-height: 1.5;
     word-break: break-word;
     overflow-wrap: break-word;
+    max-height: 30vh;
+    overflow-y: auto;
 }
 .smart-hint-btn {
     padding: 8px 20px;
@@ -1114,9 +1128,9 @@ body {
         <span id="hearts-display"></span>
     </div>
     <div class="info-right">
-        <span class="timer-icon">⏲</span>
+        <span class="timer-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></span>
         <span id="timer-display">00:00</span>
-        <button class="tool-btn" id="btn-pause" title="暂停">⏸</button>
+        <button class="tool-btn" id="btn-pause" title="暂停"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.5" height="14" rx="1.2"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2"/></svg></button>
     </div>
 </div>
 
@@ -1434,6 +1448,239 @@ class Solver {
 
         _count(copy);
         return count;
+    }
+}
+
+
+// === hint engine: technique-based hint with explanation ===
+class HintEngine {
+    static BOX_NAMES = ['左上', '正上', '右上', '左中', '正中', '右中', '左下', '正下', '右下'];
+
+    static _cellName(r, c) { return '第' + (r + 1) + '行第' + (c + 1) + '列'; }
+
+    static _unitDesc(type, idx) {
+        if (type === 'row') return '第' + (idx + 1) + '行';
+        if (type === 'col') return '第' + (idx + 1) + '列';
+        return this.BOX_NAMES[idx] + '宫';
+    }
+
+    static _units() {
+        const units = [];
+        for (let r = 0; r < 9; r++) {
+            const cells = [];
+            for (let c = 0; c < 9; c++) cells.push([r, c]);
+            units.push({ type: 'row', index: r, cells });
+        }
+        for (let c = 0; c < 9; c++) {
+            const cells = [];
+            for (let r = 0; r < 9; r++) cells.push([r, c]);
+            units.push({ type: 'col', index: c, cells });
+        }
+        for (let b = 0; b < 9; b++) {
+            const br = Math.floor(b / 3) * 3, bc = (b % 3) * 3, cells = [];
+            for (let r = br; r < br + 3; r++)
+                for (let c = bc; c < bc + 3; c++) cells.push([r, c]);
+            units.push({ type: 'box', index: b, cells });
+        }
+        return units;
+    }
+
+    static findMove(grid) {
+        const cands = [];
+        for (let r = 0; r < 9; r++) {
+            const row = [];
+            for (let c = 0; c < 9; c++) {
+                row.push(grid[r][c] === 0 ? new Set(Validator.getCandidates(grid, r, c)) : new Set());
+            }
+            cands.push(row);
+        }
+
+        const steps = [];
+        for (let iter = 0; iter < 40; iter++) {
+            const ns = this._findNakedSingle(cands);
+            if (ns) {
+                let explanation;
+                if (steps.length === 0) {
+                    explanation = '唯一候选：此格所在的行、列、宫已出现其他数字，只剩 ' + ns.digit + ' 可填';
+                } else {
+                    explanation = steps.join('；') + ' → 排除后，' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
+                }
+                return { r: ns.r, c: ns.c, digit: ns.digit, explanation };
+            }
+            const hs = this._findHiddenSingle(cands);
+            if (hs) {
+                let explanation;
+                if (steps.length === 0) {
+                    explanation = '唯余法：' + hs.unitDesc + '的其他空格都不能填 ' + hs.digit + '，只有这一格能填 ' + hs.digit;
+                } else {
+                    explanation = steps.join('；') + ' → 排除后，' + hs.unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
+                }
+                return { r: hs.r, c: hs.c, digit: hs.digit, explanation };
+            }
+            const adv = this._findLocked(cands) || this._findNakedPair(cands) || this._findHiddenPair(cands) || this._findXWing(cands);
+            if (!adv || adv.elim.length === 0) return null;
+            for (const e of adv.elim) cands[e.r][e.c].delete(e.digit);
+            steps.push(adv.desc);
+        }
+        return null;
+    }
+
+    static _findNakedSingle(cands) {
+        for (let r = 0; r < 9; r++)
+            for (let c = 0; c < 9; c++)
+                if (cands[r][c].size === 1) return { r, c, digit: [...cands[r][c]][0] };
+        return null;
+    }
+
+    static _findHiddenSingle(cands) {
+        for (const u of this._units()) {
+            for (let d = 1; d <= 9; d++) {
+                const pos = [];
+                for (const [r, c] of u.cells) if (cands[r][c].has(d)) pos.push([r, c]);
+                if (pos.length === 1) {
+                    return { r: pos[0][0], c: pos[0][1], digit: d, unitDesc: this._unitDesc(u.type, u.index) };
+                }
+            }
+        }
+        return null;
+    }
+
+    static _findLocked(cands) {
+        for (let b = 0; b < 9; b++) {
+            const br = Math.floor(b / 3) * 3, bc = (b % 3) * 3;
+            for (let d = 1; d <= 9; d++) {
+                const rows = new Set(), cols = new Set();
+                let count = 0;
+                for (let r = br; r < br + 3; r++)
+                    for (let c = bc; c < bc + 3; c++)
+                        if (cands[r][c].has(d)) { rows.add(r); cols.add(c); count++; }
+                if (count === 0) continue;
+                if (rows.size === 1) {
+                    const r = [...rows][0];
+                    const elim = [];
+                    for (let c = 0; c < 9; c++)
+                        if ((c < bc || c >= bc + 3) && cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                    if (elim.length) return { elim, desc: '宫内排除：' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (r + 1) + '行，所以第' + (r + 1) + '行其余宫格排除 ' + d };
+                }
+                if (cols.size === 1) {
+                    const c = [...cols][0];
+                    const elim = [];
+                    for (let r = 0; r < 9; r++)
+                        if ((r < br || r >= br + 3) && cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                    if (elim.length) return { elim, desc: '宫内排除：' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (c + 1) + '列，所以第' + (c + 1) + '列其余宫格排除 ' + d };
+                }
+            }
+        }
+        for (const u of this._units()) {
+            if (u.type === 'box') continue;
+            for (let d = 1; d <= 9; d++) {
+                const boxes = new Set();
+                for (const [r, c] of u.cells) if (cands[r][c].has(d)) boxes.add(Math.floor(r / 3) * 3 + Math.floor(c / 3));
+                if (boxes.size !== 1) continue;
+                const b = [...boxes][0];
+                const br = Math.floor(b / 3) * 3, bc = (b % 3) * 3;
+                const elim = [];
+                for (let r = br; r < br + 3; r++)
+                    for (let c = bc; c < bc + 3; c++) {
+                        const inUnit = u.type === 'row' ? r === u.index : c === u.index;
+                        if (!inUnit && cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                    }
+                if (elim.length) return { elim, desc: '行列排除：' + this._unitDesc(u.type, u.index) + '中数字 ' + d + ' 只出现在' + this.BOX_NAMES[b] + '宫，所以该宫其余格排除 ' + d };
+            }
+        }
+        return null;
+    }
+
+    static _findNakedPair(cands) {
+        for (const u of this._units()) {
+            const pairs = new Map();
+            for (const [r, c] of u.cells) {
+                const s = cands[r][c];
+                if (s.size === 2) {
+                    const key = [...s].sort((x, y) => x - y).join(',');
+                    if (!pairs.has(key)) pairs.set(key, []);
+                    pairs.get(key).push([r, c]);
+                }
+            }
+            for (const [key, cells] of pairs) {
+                if (cells.length !== 2) continue;
+                const [a, b] = key.split(',').map(Number);
+                const elim = [];
+                for (const [r, c] of u.cells) {
+                    if ((r === cells[0][0] && c === cells[0][1]) || (r === cells[1][0] && c === cells[1][1])) continue;
+                    for (const d of [a, b]) if (cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                }
+                if (elim.length) return { elim, desc: '数对：' + this._unitDesc(u.type, u.index) + '中' + this._cellName(cells[0][0], cells[0][1]) + '与' + this._cellName(cells[1][0], cells[1][1]) + '的候选都只有 ' + a + '、' + b + '，两数必占这两格，所以其余格排除 ' + a + '、' + b };
+            }
+        }
+        return null;
+    }
+
+    static _findHiddenPair(cands) {
+        for (const u of this._units()) {
+            const pos = new Map();
+            for (let d = 1; d <= 9; d++) {
+                const cells = [];
+                for (const [r, c] of u.cells) if (cands[r][c].has(d)) cells.push([r, c]);
+                if (cells.length === 2) pos.set(d, cells);
+            }
+            const digits = [...pos.keys()];
+            for (let i = 0; i < digits.length; i++) {
+                for (let j = i + 1; j < digits.length; j++) {
+                    const c1 = pos.get(digits[i]), c2 = pos.get(digits[j]);
+                    if (c1[0][0] === c2[0][0] && c1[0][1] === c2[0][1] && c1[1][0] === c2[1][0] && c1[1][1] === c2[1][1]) {
+                        const elim = [];
+                        for (const [r, c] of c1)
+                            for (const d of [...cands[r][c]])
+                                if (d !== digits[i] && d !== digits[j]) elim.push({ r, c, digit: d });
+                        if (elim.length) return { elim, desc: '隐性数对：' + this._unitDesc(u.type, u.index) + '中数字 ' + digits[i] + '、' + digits[j] + ' 只能放在' + this._cellName(c1[0][0], c1[0][1]) + '和' + this._cellName(c1[1][0], c1[1][1]) + '，所以这两格排除其他候选' };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    static _findXWing(cands) {
+        for (let d = 1; d <= 9; d++) {
+            const rowPos = [];
+            for (let r = 0; r < 9; r++) {
+                const cols = [];
+                for (let c = 0; c < 9; c++) if (cands[r][c].has(d)) cols.push(c);
+                if (cols.length === 2) rowPos.push({ r, cols });
+            }
+            for (let i = 0; i < rowPos.length; i++) {
+                for (let j = i + 1; j < rowPos.length; j++) {
+                    const a = rowPos[i], b = rowPos[j];
+                    if (a.cols[0] === b.cols[0] && a.cols[1] === b.cols[1]) {
+                        const elim = [];
+                        for (const c of a.cols)
+                            for (let r = 0; r < 9; r++)
+                                if (r !== a.r && r !== b.r && cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                        if (elim.length) return { elim, desc: 'X-Wing：数字 ' + d + ' 在第' + (a.r + 1) + '行和第' + (b.r + 1) + '行都只能放在第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列，形成矩形，所以第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列其余格排除 ' + d };
+                    }
+                }
+            }
+            const colPos = [];
+            for (let c = 0; c < 9; c++) {
+                const rows = [];
+                for (let r = 0; r < 9; r++) if (cands[r][c].has(d)) rows.push(r);
+                if (rows.length === 2) colPos.push({ c, rows });
+            }
+            for (let i = 0; i < colPos.length; i++) {
+                for (let j = i + 1; j < colPos.length; j++) {
+                    const a = colPos[i], b = colPos[j];
+                    if (a.rows[0] === b.rows[0] && a.rows[1] === b.rows[1]) {
+                        const elim = [];
+                        for (const r of a.rows)
+                            for (let c = 0; c < 9; c++)
+                                if (c !== a.c && c !== b.c && cands[r][c].has(d)) elim.push({ r, c, digit: d });
+                        if (elim.length) return { elim, desc: 'X-Wing：数字 ' + d + ' 在第' + (a.c + 1) + '列和第' + (b.c + 1) + '列都只能放在第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行，形成矩形，所以第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行其余格排除 ' + d };
+                    }
+                }
+            }
+        }
+        return null;
     }
 }
 
@@ -4307,28 +4554,36 @@ class SudokuGame {
             return;
         }
 
-        // Find the most constrained cell (fewest candidates)
-        let bestCell = null, bestCount = 10;
-        for (let rr = 0; rr < 9; rr++) {
-            for (let cc = 0; cc < 9; cc++) {
-                if (!this.board.isGiven(rr, cc) &&
-                    (this.board.isEmpty(rr, cc) || !this.board.isCorrect(rr, cc))) {
-                    const candidates = Validator.getCandidates(this.board.grid, rr, cc);
-                    if (candidates.length < bestCount && candidates.length > 0) {
-                        bestCount = candidates.length;
-                        bestCell = { r: rr, c: cc };
+        let r, c, answer, explanation;
+
+        // Technique-based hint: naked/hidden single, locked candidates, pairs, X-Wing...
+        const move = HintEngine.findMove(this.board.grid);
+        if (move && move.digit === this.board.getHint(move.r, move.c)) {
+            r = move.r;
+            c = move.c;
+            answer = move.digit;
+            explanation = move.explanation;
+        } else {
+            // Fallback (e.g. user errors on board): most constrained cell + solution value
+            let bestCell = null, bestCount = 10;
+            for (let rr = 0; rr < 9; rr++) {
+                for (let cc = 0; cc < 9; cc++) {
+                    if (!this.board.isGiven(rr, cc) &&
+                        (this.board.isEmpty(rr, cc) || !this.board.isCorrect(rr, cc))) {
+                        const candidates = Validator.getCandidates(this.board.grid, rr, cc);
+                        if (candidates.length < bestCount && candidates.length > 0) {
+                            bestCount = candidates.length;
+                            bestCell = { r: rr, c: cc };
+                        }
                     }
                 }
             }
+            if (!bestCell) return;
+            r = bestCell.r;
+            c = bestCell.c;
+            answer = this.board.getHint(r, c);
+            explanation = this._buildHintReason(r, c, answer);
         }
-        if (!bestCell) return;
-        const r = bestCell.r;
-        const c = bestCell.c;
-
-        const answer = this.board.getHint(r, c);
-
-        // Build specific explanation
-        const explanation = this._buildHintReason(r, c, answer);
 
         this._hideSmartHint();
         this.selectCell(r, c);
@@ -4434,12 +4689,12 @@ class SudokuGame {
         this.selectCell(r, c);
     }
 
-    pause() {
+    pause(silent) {
         if (this.completed || !this.gameStarted) return;
         this.paused = true;
         this.timer.pause();
         document.getElementById('pause-overlay').classList.add('active');
-        this.sound.play('btn_click');
+        if (!silent) this.sound.play('btn_click');
     }
 
     resume() {
@@ -4979,10 +5234,11 @@ window._onBackPressed = function() {
     return 'false';
 };
 
-// Save game when app is backgrounded (Android WebView)
+// Save game and auto-pause when app is backgrounded or screen locked
 document.addEventListener('visibilitychange', function() {
     if (document.hidden && window.game && window.game.gameStarted && !window.game.completed) {
         window.game._save();
+        if (!window.game.paused) window.game.pause(true);
     }
 });
 window.addEventListener('pagehide', function() {
