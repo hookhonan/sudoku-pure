@@ -971,6 +971,19 @@ body {
 }
 .smart-hint-close:active { transform: scale(0.9); }
 
+/* 宽屏（电脑）：提示框显示在棋盘右侧，避免遮挡 */
+@media (min-width: 901px) {
+    #smart-hint {
+        left: auto;
+        right: 24px;
+        top: 50%;
+        bottom: auto;
+        transform: translateY(-50%);
+        max-width: 340px;
+        width: 340px;
+    }
+}
+
 
 #hearts-display {
     font-size: 1.2rem;
@@ -1605,10 +1618,11 @@ class HintEngine {
             if (ns) {
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    // 简单情况：2 步（注意+因果合并 → 结论），不强行三步
-                    stepList.push({ text: '注意' + this._cellName(ns.r, ns.c) + '（高亮格）：它所在的行、列、宫已经出现了其余 8 个数字，候选数字只剩 ' + ns.digit + ' 一个', region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c) });
+                    // 简单情况：1 步完成（方法名 + 原理 + 结论，全部高亮合一）
+                    stepList.push({ text: '【唯一候选】' + this._cellName(ns.r, ns.c) + '（高亮格）所在的行、列、宫已出现其余 8 个数字（橙色填充格），候选只剩 ' + ns.digit + '，因此必须填 ' + ns.digit, region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c), target: [ns.r, ns.c] });
+                } else {
+                    stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c] });
                 }
-                stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c] });
                 const desc = '【唯一候选】' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
                 return { r: ns.r, c: ns.c, digit: ns.digit, explanation: desc, steps: stepList };
             }
@@ -1617,7 +1631,7 @@ class HintEngine {
                 const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    // 排除格（不能填 d 的空格）+ 约束源（已填的 d 格）一起高亮
+                    // 排除格（不能填 d 的空格）+ 约束源（已填的 d 格）一起高亮；1 步完成
                     const blocked = this._unitEmptyCells(grid, hs.unitType, hs.unitIndex)
                         .filter(([r, c]) => !(r === hs.r && c === hs.c) && !Validator.getCandidates(grid, r, c).includes(hs.digit));
                     const sources = [];
@@ -1627,9 +1641,10 @@ class HintEngine {
                             if (!seen.has(br * 9 + bc)) { seen.add(br * 9 + bc); sources.push([br, bc]); }
                         }
                     }
-                    stepList.push({ text: '注意' + unitDesc + '（高亮区域）：其中除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（橙色填充格）约束，都不能填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, cells: blocked, fillCells: sources });
+                    stepList.push({ text: '【唯余法】' + unitDesc + '（高亮区域）中，除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（橙色填充格）约束都不能填 ' + hs.digit + '，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, cells: blocked, fillCells: sources, target: [hs.r, hs.c] });
+                } else {
+                    stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c] });
                 }
-                stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c] });
                 const desc = '【唯余法】' + unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
                 return { r: hs.r, c: hs.c, digit: hs.digit, explanation: desc, steps: stepList };
             }
@@ -1662,7 +1677,7 @@ class HintEngine {
                             r, c, digit: answer,
                             explanation: '【矛盾试探】若' + this._cellName(r, c) + '填 ' + trial + '，则经推导后会产生矛盾（某格无候选数），因此' + this._cellName(r, c) + '必须填 ' + answer,
                             steps: [
-                                { text: '先假设' + this._cellName(r, c) + '填 ' + trial, region: { cells: [[r, c]] } },
+                                { text: '【矛盾试探】先假设' + this._cellName(r, c) + '填 ' + trial, region: { cells: [[r, c]] } },
                                 { text: '顺着唯一候选/唯余法推导，' + this._cellName(contradiction[0], contradiction[1]) + '将没有任何可填的数字，与数独规则矛盾', cells: [contradiction] },
                                 { text: '所以假设不成立，' + this._cellName(r, c) + '必须填 ' + answer, target: [r, c] },
                             ]
@@ -3719,6 +3734,29 @@ class Renderer {
                 }
             }
         }
+
+        // 提示临时笔记：高亮框内显示候选数字（橙色小字，覆盖同位置正常笔记，不落盘）
+        if (state.hintStep) {
+            const hs = state.hintStep;
+            const tempCells = (hs.cells || []).concat(hs.target ? [hs.target] : []);
+            if (tempCells.length) {
+                const hintNoteStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-cause').trim() || '#f9a825';
+                const third = cs / 3;
+                for (const [r, c] of tempCells) {
+                    if (board.getCell(r, c) !== 0) continue;
+                    const cands = Validator.getCandidates(board.grid, r, c);
+                    if (cands.length === 0 || cands.length > 4) continue;
+                    ctx.fillStyle = hintNoteStyle;
+                    ctx.font = `${noteFontSize}px "Segoe UI", system-ui, sans-serif`;
+                    for (const num of cands) {
+                        const nr = Math.floor((num - 1) / 3);
+                        const nc = (num - 1) % 3;
+                        ctx.fillText(num.toString(), c * cs + nc * third + third / 2, r * cs + nr * third + third / 2);
+                    }
+                }
+            }
+        }
     }
 
     _drawSelection(ctx, state) {
@@ -5212,8 +5250,7 @@ class SudokuGame {
                     const cands = Validator.getCandidates(this.board.grid, r, c);
                     explanation = '【候选分析】' + HintEngine._cellName(r, c) + '当前候选数为[' + cands.join(',') + ']，该格受行列宫多重交叉约束，需组合排除法推导。建议先用候选笔记辅助分析。';
                     steps = [
-                        { text: '注意' + HintEngine._cellName(r, c) + '（高亮格），它的候选数字是 [' + cands.join(',') + ']', region: { cells: [[r, c]] } },
-                        { text: '该格同时受所在行、列、宫的多重约束，当前没有单一的技巧能直接确定数字', cells: HintEngine._filledNeighbors(this.board.grid, r, c) },
+                        { text: '【候选分析】' + HintEngine._cellName(r, c) + '（高亮格）的候选数字是 [' + cands.join(',') + ']，同时受所在行、列、宫的多重约束（橙色填充格），当前没有单一技巧能直接确定', region: { cells: [[r, c]] }, fillCells: HintEngine._filledNeighbors(this.board.grid, r, c) },
                         { text: '建议先用一键笔记记录候选，再配合上面的技巧逐步推导' },
                     ];
                 }
@@ -5259,8 +5296,7 @@ class SudokuGame {
             else if (boxEmpty === 1) text = '【唯余法】该宫只剩这一格未填，必须填'+answer;
             else text = '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
             const steps = [
-                { text: '注意' + cellName + '（高亮格）：它所在的行已有[' + [...rowNums].join(',') + ']，列已有[' + [...colNums].join(',') + ']，宫已有[' + [...boxNums].join(',') + ']（橙色填充格），只有 ' + answer + ' 没有出现过', region: { cells: [[row, col]] }, fillCells: filled },
-                { text: '因此' + cellName + '必须填 ' + answer, target: [row, col] },
+                { text: '【' + (rowEmpty === 1 ? '唯余法' : colEmpty === 1 ? '唯余法' : boxEmpty === 1 ? '唯余法' : '唯一候选') + '】' + cellName + '（高亮格）所在的行已有[' + [...rowNums].join(',') + ']、列已有[' + [...colNums].join(',') + ']、宫已有[' + [...boxNums].join(',') + ']（橙色填充格），只剩 ' + answer + ' 没出现过，因此必须填 ' + answer, region: { cells: [[row, col]] }, fillCells: filled, target: [row, col] },
             ];
             return { text, steps };
         }
@@ -5575,7 +5611,7 @@ class SudokuGame {
 
             const stepsEl = document.getElementById('smart-hint-steps');
             if (stepsEl) {
-                if (this._hintSteps) {
+                if (this._hintSteps && total > 1) {
                     let dots = '';
                     for (let i = 0; i < total; i++) {
                         dots += '<span class="smart-hint-step-dot' + (i === idx ? ' active' : '') + '"></span>';
@@ -5643,11 +5679,20 @@ class SudokuGame {
         }
         renderStep();
         hintEl.style.display = 'flex';
-        // Use fixed bottom positioning — always visible regardless of cell
-        hintEl.style.bottom = '80px';
-        hintEl.style.left = '50%';
-        hintEl.style.transform = 'translateX(-50%)';
-        hintEl.style.top = 'auto';
+        // 响应式定位：宽屏（电脑）显示在棋盘右侧，窄屏（手机）显示在数字键上方
+        if (window.innerWidth > 900) {
+            hintEl.style.bottom = 'auto';
+            hintEl.style.left = 'auto';
+            hintEl.style.right = '24px';
+            hintEl.style.top = '50%';
+            hintEl.style.transform = 'translateY(-50%)';
+        } else {
+            hintEl.style.right = 'auto';
+            hintEl.style.top = 'auto';
+            hintEl.style.bottom = '80px';
+            hintEl.style.left = '50%';
+            hintEl.style.transform = 'translateX(-50%)';
+        }
     }
 
     _hideSmartHint() {
@@ -5660,6 +5705,7 @@ class SudokuGame {
             hintEl.style.display = 'none';
             hintEl.style.bottom = '';
             hintEl.style.left = '';
+            hintEl.style.right = '';
             hintEl.style.transform = '';
             hintEl.style.top = '';
         }
