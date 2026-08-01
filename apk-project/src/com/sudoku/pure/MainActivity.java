@@ -74,11 +74,16 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
-                if (webView != null) {
-                    webView.destroy();
-                    webView = null;
-                }
-                recreate();
+                // Renderer death is common on cold start (large page + fresh WebView). Recreate on
+                // the next main-loop pass: synchronous recreate() here can re-enter the activity
+                // lifecycle while it is mid-pause, and webView is already null, crashing onPause().
+                view.post(() -> {
+                    try {
+                        recreate();
+                    } catch (IllegalStateException e) {
+                        finish();
+                    }
+                });
                 return true;
             }
         });
@@ -91,6 +96,10 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         backHandledByJS = false;
+        if (webView == null) {
+            finish();
+            return;
+        }
         webView.evaluateJavascript("javascript:window._onBackPressed&&window._onBackPressed()", null);
         webView.postDelayed(() -> {
             if (!backHandledByJS) {
@@ -102,13 +111,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        webView.onPause();
+        if (webView != null) webView.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        webView.onResume();
+        if (webView != null) webView.onResume();
     }
 
     @Override

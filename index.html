@@ -1830,6 +1830,25 @@ class HintEngine {
         return null;
     }
 
+    // 摩天楼：两行（列）各恰好 2 个候选位，共用一列（行）作底墙；
+    // 两顶层格必有一个为 d，故同时看到这两格（行/列/宫共视）的格排除 d。
+    // 注意：绝不能按"顶层所在整列"排除——那里绝大多数格看不到另一个顶层格（曾因此误删解答值）
+    static _skyscraperElims(cands, d, r1, c1, r2, c2) {
+        const elim = [];
+        const br1 = Math.floor(r1 / 3) * 3, bc1 = Math.floor(c1 / 3) * 3;
+        const br2 = Math.floor(r2 / 3) * 3, bc2 = Math.floor(c2 / 3) * 3;
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if ((r === r1 && c === c1) || (r === r2 && c === c2)) continue;
+                if (!cands[r][c].has(d)) continue;
+                const sees1 = r === r1 || c === c1 || (r >= br1 && r < br1 + 3 && c >= bc1 && c < bc1 + 3);
+                const sees2 = r === r2 || c === c2 || (r >= br2 && r < br2 + 3 && c >= bc2 && c < bc2 + 3);
+                if (sees1 && sees2) elim.push({ r, c, digit: d });
+            }
+        }
+        return elim;
+    }
+
     static _findSkyscraper(cands) {
         for (let d = 1; d <= 9; d++) {
             const rowPos = [];
@@ -1841,25 +1860,34 @@ class HintEngine {
             for (let i = 0; i < rowPos.length; i++) {
                 for (let j = i + 1; j < rowPos.length; j++) {
                     const a = rowPos[i], b = rowPos[j];
-                    if (a.cols[0] === b.cols[0] && a.cols[1] !== b.cols[1]) {
-                        const elim = [];
-                        for (let rr = 0; rr < 9; rr++) {
-                            if (rr !== a.r && rr !== b.r) {
-                                if (cands[rr][a.cols[1]].has(d)) elim.push({ r: rr, c: a.cols[1], digit: d });
-                                if (cands[rr][b.cols[1]].has(d)) elim.push({ r: rr, c: b.cols[1], digit: d });
-                            }
-                        }
-                        if (elim.length) return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.r + 1) + '行只能放在第' + (a.cols[1] + 1) + '列，在第' + (b.r + 1) + '行只能放在第' + (b.cols[1] + 1) + '列，这两格"共视"，其所在列其余格排除 ' + d };
+                    const shared = a.cols.filter(c => b.cols.includes(c));
+                    if (shared.length !== 1) continue;
+                    const base = shared[0];
+                    const r1c1 = a.cols[0] === base ? a.cols[1] : a.cols[0];
+                    const r2c2 = b.cols[0] === base ? b.cols[1] : b.cols[0];
+                    const elim = this._skyscraperElims(cands, d, a.r, r1c1, b.r, r2c2);
+                    if (elim.length) {
+                        return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.r + 1) + '行只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '列，第' + (b.r + 1) + '行只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '列，两行共用第' + (base + 1) + '列作底墙，顶层' + this._cellName(a.r, r1c1) + '与' + this._cellName(b.r, r2c2) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
                     }
-                    if (a.cols[1] === b.cols[1] && a.cols[0] !== b.cols[0]) {
-                        const elim = [];
-                        for (let rr = 0; rr < 9; rr++) {
-                            if (rr !== a.r && rr !== b.r) {
-                                if (cands[rr][a.cols[0]].has(d)) elim.push({ r: rr, c: a.cols[0], digit: d });
-                                if (cands[rr][b.cols[0]].has(d)) elim.push({ r: rr, c: b.cols[0], digit: d });
-                            }
-                        }
-                        if (elim.length) return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.r + 1) + '行只能放在第' + (a.cols[0] + 1) + '列，在第' + (b.r + 1) + '行只能放在第' + (b.cols[0] + 1) + '列，这两格"共视"，其所在列其余格排除 ' + d };
+                }
+            }
+            const colPos = [];
+            for (let c = 0; c < 9; c++) {
+                const rows = [];
+                for (let r = 0; r < 9; r++) if (cands[r][c].has(d)) rows.push(r);
+                if (rows.length === 2) colPos.push({ c, rows });
+            }
+            for (let i = 0; i < colPos.length; i++) {
+                for (let j = i + 1; j < colPos.length; j++) {
+                    const a = colPos[i], b = colPos[j];
+                    const shared = a.rows.filter(r => b.rows.includes(r));
+                    if (shared.length !== 1) continue;
+                    const base = shared[0];
+                    const r1c1 = a.rows[0] === base ? a.rows[1] : a.rows[0];
+                    const r2c2 = b.rows[0] === base ? b.rows[1] : b.rows[0];
+                    const elim = this._skyscraperElims(cands, d, r1c1, a.c, r2c2, b.c);
+                    if (elim.length) {
+                        return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.c + 1) + '列只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '行，第' + (b.c + 1) + '列只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '行，两列共用第' + (base + 1) + '行作底墙，顶层' + this._cellName(r1c1, a.c) + '与' + this._cellName(r2c2, b.c) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
                     }
                 }
             }
@@ -1879,6 +1907,7 @@ class HintEngine {
                             if (Math.floor(row.r / 3) * 3 + Math.floor(rc / 3) !== Math.floor(cr / 3) * 3 + Math.floor(col.c / 3)) continue;
                             const rc2 = row.cols[0] === rc ? row.cols[1] : row.cols[0];
                             const cr2 = col.rows[0] === cr ? col.rows[1] : col.rows[0];
+                            if (cr2 === row.r || rc2 === col.c) continue; // 退化：目标格即模式自身的候选位
                             if (cands[cr2][rc2].has(d)) {
                                 const boxName = this.BOX_NAMES[Math.floor(cr / 3) * 3 + Math.floor(rc / 3)];
                                 return { elim: [{ r: cr2, c: rc2, digit: d }], desc: '【风筝】数字 ' + d + ' 在第' + (row.r + 1) + '行和第' + (col.c + 1) + '列各有两个候选位，其中一处同在' + boxName + '宫形成弱连接，故' + this._cellName(cr2, rc2) + '排除 ' + d };
@@ -2907,18 +2936,22 @@ class Board {
     }
 
     removeNoteFromRelated(num, row, col) {
-        let removed = 0;
+        const removed = [];
+        const collect = (r, c) => {
+            if (this.notes[r][c].has(num)) {
+                removed.push({ r, c, notes: [...this.notes[r][c]] });
+                this.notes[r][c].delete(num);
+            }
+        };
         for (let i = 0; i < 9; i++) {
-            if (this.notes[row][i].delete(num)) removed++;
-            if (this.notes[i][col].delete(num)) removed++;
+            collect(row, i);
+            collect(i, col);
         }
         const br = Math.floor(row / 3) * 3;
         const bc = Math.floor(col / 3) * 3;
-        for (let r = br; r < br + 3; r++) {
-            for (let c = bc; c < bc + 3; c++) {
-                if (this.notes[r][c].delete(num)) removed++;
-            }
-        }
+        for (let r = br; r < br + 3; r++)
+            for (let c = bc; c < bc + 3; c++)
+                collect(r, c);
         return removed;
     }
 
@@ -3076,9 +3109,10 @@ class LevelManager {
         let stars = 1;
         if (timeSeconds < 300) stars = 3;
         else if (timeSeconds < 600) stars = 2;
+        stars = Math.max(old.stars || 0, stars);
         this.progress[key] = { completed: true, bestTime, stars, lastTime: timeSeconds, plays: (old.plays || 0) + 1 };
         this.save();
-        return { bestTime, stars, isNewBest: !!old.bestTime && timeSeconds < old.bestTime };
+        return { bestTime, stars, isNewBest: !old.bestTime || timeSeconds < old.bestTime };
     }
 
     getBestTime(difficulty, level) {
@@ -3744,7 +3778,6 @@ class InputHandler {
         document.getElementById('btn-erase')?.addEventListener('click', () => this.game.erase());
         document.getElementById('btn-hint')?.addEventListener('click', () => this.game.useHint());
         document.getElementById('btn-pause')?.addEventListener('click', () => this.game.pause());
-        document.getElementById('btn-mute')?.addEventListener('click', () => this.game.toggleMute());
 
         document.getElementById('btn-new-game')?.addEventListener('click', () => {
             document.getElementById('dialog-difficulty').classList.add('active');
@@ -3779,6 +3812,8 @@ class InputHandler {
             this.game.dialogs.hide();
             if (this.game.gameMode === 'level') {
                 this.game.restartGame();
+            } else if (this.game.gameMode === 'daily') {
+                this.game.startDaily(this.game.dailyDateKey);
             } else {
                 this.game.startGame(this.game.difficulty, 'random');
             }
@@ -4458,6 +4493,7 @@ class SudokuGame {
             this.timer.pause();
             this.gameStarted = false;
         }
+        this.paused = false;
         this.dialogs.hide();
         this._showStartScreen();
     }
@@ -4596,7 +4632,7 @@ class SudokuGame {
         const saved = Storage.loadGame();
         if (!saved || !saved.gameStarted) return;
 
-        this._restoreGame(saved);
+        if (!this._restoreGame(saved)) return;
         this.gameStarted = true;
         this._hideStartScreen();
         this._updateDifficultyLabel();
@@ -4665,6 +4701,14 @@ class SudokuGame {
     }
 
     _restoreGame(saved) {
+        // Guard against old-format/corrupt saves (cross-version upgrades keep localStorage)
+        if (!saved || !Array.isArray(saved.puzzle) || !Array.isArray(saved.solution) ||
+            !Array.isArray(saved.grid) || !Array.isArray(saved.notes) ||
+            saved.puzzle.length !== 9 || saved.solution.length !== 9 ||
+            saved.grid.length !== 9 || saved.notes.length !== 9) {
+            Storage.clearGame();
+            return false;
+        }
         this.difficulty = saved.difficulty;
         this.board.reset();
         this.board.load(saved.puzzle, saved.solution);
@@ -4681,8 +4725,9 @@ class SudokuGame {
         this.timer.elapsed = saved.elapsed || 0;
         this.timer.start();
         this.noteMode = saved.noteMode || false;
-        this.selectedRow = saved.selectedRow;
-        this.selectedCol = saved.selectedCol;
+        // ?? null: 旧存档缺失字段时是 undefined，_updateNumPadHighlight 的 === null 守卫会漏掉
+        this.selectedRow = saved.selectedRow ?? null;
+        this.selectedCol = saved.selectedCol ?? null;
         this.hints.remaining = HINT_UNLIMITED ? 999 : (saved.hintRemaining ?? 3);
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
         this.hints.autoNoteCleared = saved.autoNoteCleared ?? false;
@@ -4698,9 +4743,11 @@ class SudokuGame {
             this.history.pointer = saved.historyPointer;
         }
 
+        this.paused = false;
         this._updateDifficultyLabel();
         this._updateToolbarState();
         this._resize();
+        return true;
     }
 
     selectCell(row, col) {
@@ -4759,12 +4806,19 @@ class SudokuGame {
         this.board.setCell(r, c, num);
         this.sameNumHighlight = (num !== 0) ? num : null;
 
+        let relatedNotes = [];
+        if (num !== 0 && this.board.isCorrect(r, c)) {
+            this.sound.play('num_right');
+            relatedNotes = this._removeRelatedNotes(num, r, c);
+        }
+
         this.history.push({
             type: oldVal === 0 && oldNotes.size === 0 ? ActionType.FILL :
                   num === 0 ? ActionType.ERASE : ActionType.FILL,
             row: r, col: c,
             oldValue: oldVal, newValue: num,
             oldNotes: [...oldNotes], newNotes: [],
+            relatedNotes,
         });
 
         this.sound.play('num_click');
@@ -4779,9 +4833,6 @@ class SudokuGame {
                 this._gameOver();
                 return;
             }
-        } else if (num !== 0) {
-            this.sound.play('num_right');
-            this._removeRelatedNotes(num, r, c);
         }
 
         this._updateNumPadHighlight();
@@ -4881,10 +4932,21 @@ class SudokuGame {
         if (direction === 'undo') {
             this.board.grid[row][col] = action.oldValue;
             this.board.notes[row][col] = new Set(action.oldNotes);
+            if (action.relatedNotes && action.newValue !== 0) {
+                for (const rn of action.relatedNotes) {
+                    if (this.board.grid[rn.r][rn.c] !== 0) continue;
+                    for (const n of rn.notes) this.board.notes[rn.r][rn.c].add(n);
+                }
+            }
             this.selectCell(row, col);
         } else {
             this.board.grid[row][col] = action.newValue;
             this.board.notes[row][col] = new Set(action.newNotes);
+            if (action.relatedNotes && action.newValue !== 0) {
+                for (const rn of action.relatedNotes) {
+                    for (const n of rn.notes) this.board.notes[rn.r][rn.c].delete(n);
+                }
+            }
             this.selectCell(row, col);
         }
     }
@@ -4993,13 +5055,14 @@ class SudokuGame {
 
         this.board.setCell(r, c, answer);
         this.board.notes[r][c].clear();
-        this._removeRelatedNotes(answer, r, c);
+        const relatedNotes = this._removeRelatedNotes(answer, r, c);
 
         this.history.push({
             type: ActionType.HINT,
             row: r, col: c,
             oldValue: oldVal, newValue: answer,
             oldNotes: [...oldNotes], newNotes: [],
+            relatedNotes,
         });
 
         this.hintCell = { r, c };
@@ -5138,11 +5201,13 @@ class SudokuGame {
     }
 
     _removeRelatedNotes(num, row, col) {
-        if (this.board.removeNoteFromRelated(num, row, col) > 0) {
+        const removed = this.board.removeNoteFromRelated(num, row, col);
+        if (removed.length > 0) {
             this._updateNumPadHighlight();
             this._render();
             this._save();
         }
+        return removed;
     }
 
     _updateNumCounts() {
@@ -5390,7 +5455,7 @@ class SudokuGame {
             } else if (this.gameMode === 'daily') {
                 const prevBest = this.dailyManager.getInfo(this.dailyDateKey).bestTime;
                 this.dailyManager.complete(this.dailyDateKey, timeSec);
-                isNewBest = prevBest != null && timeSec < prevBest;
+                isNewBest = prevBest == null || timeSec < prevBest;
             } else {
                 isNewBest = this.stats.isNewBest(this.difficulty, timeSec);
             }
