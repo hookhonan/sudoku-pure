@@ -596,7 +596,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    width: calc(100% - 12px);
+    width: calc(100% - 8px);
     height: 56px;
     border-radius: 10px;
     border: 1.5px solid var(--grid-line);
@@ -3907,7 +3907,7 @@ class Renderer {
 
     _drawNotes(ctx, board, state) {
         const cs = this.cellSize;
-        const noteFontSize = cs * 0.18;
+        const noteFontSize = cs * 0.20;
         const boldNum = state.boldNoteNum || 0;
 
         ctx.textAlign = 'center';
@@ -6197,10 +6197,10 @@ class SudokuGame {
             el.style.marginLeft = 'auto';
             el.style.marginRight = 'auto';
         });
-        // Numpad: exact board alignment (columns line up)
+        // Numpad: 比棋盘略窄（97%），按钮更大更饱满
         const numpad = document.getElementById('numpad');
         if (numpad) {
-            numpad.style.maxWidth = size + 'px';
+            numpad.style.maxWidth = (size * 0.97) + 'px';
             numpad.style.marginLeft = 'auto';
             numpad.style.marginRight = 'auto';
         }
