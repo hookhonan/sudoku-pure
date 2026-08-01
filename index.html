@@ -1689,11 +1689,61 @@ class HintEngine {
                 const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    const scan = this._scanLines(grid, hs.digit, hs.r, hs.c);
+                    let lines, litSources, exclCells = [];
+                    if (hs.unitType === 'row') {
+                        // 隐性唯一数（行单位）：目标行内被同列/同宫 d 排除的空格
+                        // → 高亮原因格所在列（同列排除）或行（同宫排除），被排除空格红字 d 标记
+                        lines = []; litSources = [];
+                        const seenSrc = new Set(), seenLine = new Set();
+                        for (let cc = 0; cc < 9; cc++) {
+                            if (grid[hs.r][cc] !== 0 || cc === hs.c) continue;
+                            if (Validator.getCandidates(grid, hs.r, cc).includes(hs.digit)) continue;
+                            exclCells.push({ r: hs.r, c: cc, digit: hs.digit });
+                            for (let br = 0; br < 9; br++) {
+                                if (grid[br][cc] !== hs.digit) continue;
+                                if (!seenSrc.has(br * 9 + cc)) { seenSrc.add(br * 9 + cc); litSources.push([br, cc]); }
+                                if (!seenLine.has('c' + cc)) { seenLine.add('c' + cc); lines.push({ type: 'col', index: cc }); }
+                            }
+                            const cbr = Math.floor(hs.r / 3) * 3, cbc = Math.floor(cc / 3) * 3;
+                            for (let rr = cbr; rr < cbr + 3; rr++)
+                                for (let c2 = cbc; c2 < cbc + 3; c2++)
+                                    if (grid[rr][c2] === hs.digit && !(rr === hs.r && c2 === cc)) {
+                                        if (!seenSrc.has(rr * 9 + c2)) { seenSrc.add(rr * 9 + c2); litSources.push([rr, c2]); }
+                                        if (!seenLine.has('r' + rr)) { seenLine.add('r' + rr); lines.push({ type: 'row', index: rr }); }
+                                    }
+                        }
+                    } else if (hs.unitType === 'col') {
+                        // 隐性唯一数（列单位）：目标列内被同行/同宫 d 排除的空格
+                        lines = []; litSources = [];
+                        const seenSrc = new Set(), seenLine = new Set();
+                        for (let rr = 0; rr < 9; rr++) {
+                            if (grid[rr][hs.c] !== 0 || rr === hs.r) continue;
+                            if (Validator.getCandidates(grid, rr, hs.c).includes(hs.digit)) continue;
+                            exclCells.push({ r: rr, c: hs.c, digit: hs.digit });
+                            for (let bc = 0; bc < 9; bc++) {
+                                if (grid[rr][bc] !== hs.digit) continue;
+                                if (!seenSrc.has(rr * 9 + bc)) { seenSrc.add(rr * 9 + bc); litSources.push([rr, bc]); }
+                                if (!seenLine.has('r' + rr)) { seenLine.add('r' + rr); lines.push({ type: 'row', index: rr }); }
+                            }
+                            const cbr = Math.floor(rr / 3) * 3, cbc = Math.floor(hs.c / 3) * 3;
+                            for (let r2 = cbr; r2 < cbr + 3; r2++)
+                                for (let c2 = cbc; c2 < cbc + 3; c2++)
+                                    if (grid[r2][c2] === hs.digit && !(r2 === rr && c2 === hs.c)) {
+                                        if (!seenSrc.has(r2 * 9 + c2)) { seenSrc.add(r2 * 9 + c2); litSources.push([r2, c2]); }
+                                        if (!seenLine.has('c' + c2)) { seenLine.add('c' + c2); lines.push({ type: 'col', index: c2 }); }
+                                    }
+                        }
+                    } else {
+                        // 宫单位：全盘扫描，行/列经过目标宫且交叉有空格才亮
+                        const scan = this._scanLines(grid, hs.digit, hs.r, hs.c);
+                        lines = scan.lines;
+                        litSources = scan.litSources;
+                    }
                     stepList.push({
                         text: '【唯余法】' + unitDesc + '中，除' + this._cellName(hs.r, hs.c) + '外，其他空格都被数字 ' + hs.digit + ' 排除，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit,
-                        lines: scan.lines,
-                        fillCells: scan.litSources,
+                        lines,
+                        fillCells: litSources,
+                        exclCells,
                         boxFrame: this._boxIndex(hs.r, hs.c),
                         target: [hs.r, hs.c],
                         targetDigit: hs.digit
@@ -3888,6 +3938,21 @@ class Renderer {
                     ctx.fillText(num.toString(), x, y);
                 }
             }
+        }
+
+        // 隐性唯一数（行/列单位）被排除空格：红色数字标记（该格不能填此数）
+        if (state.hintStep && state.hintStep.exclCells && state.hintStep.exclCells.length) {
+            const hs = state.hintStep;
+            const exclStyle = getComputedStyle(document.documentElement)
+                .getPropertyValue('--hint-elim').trim() || '#ff2d55';
+            ctx.globalAlpha = state.hintFlash ? 1 : 0.55;
+            for (const ex of hs.exclCells) {
+                if (board.getCell(ex.r, ex.c) !== 0) continue;
+                ctx.fillStyle = exclStyle;
+                ctx.font = `bold ${noteFontSize * 1.15}px "Segoe UI", system-ui, sans-serif`;
+                ctx.fillText(ex.digit.toString(), ex.c * cs + cs / 2, ex.r * cs + cs / 2);
+            }
+            ctx.globalAlpha = 1;
         }
 
         // 提示临时笔记：仅多步排除法步骤显示候选数字（覆盖同位置正常笔记，不落盘）
