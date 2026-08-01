@@ -60,11 +60,12 @@ button {
     --highlight-selected: #bbdefb;
     --highlight-same-num: #c8e6c9;
     --selection-border: #1976d2;
-    --hint-region: rgba(66, 165, 245, 0.16);
-    --hint-cause: #1e88e5;
-    --hint-target: #2196f3;
-    --hint-fill: rgba(33, 150, 243, 0.32);
+    --hint-region: rgba(66, 165, 245, 0.20);
+    --hint-cause: #d32f2f;
+    --hint-target: #f9a825;
+    --hint-fill: rgba(255, 213, 79, 0.5);
     --hint-dim: rgba(0, 0, 0, 0.07);
+    --hint-box: #43a047;
     --btn-bg: transparent;
     --btn-hover: #f0f0f0;
     --btn-active: #e3f2fd;
@@ -98,11 +99,12 @@ button {
     --highlight-selected: #0d47a1;
     --highlight-same-num: #1b3a1b;
     --selection-border: #42a5f5;
-    --hint-region: rgba(100, 181, 246, 0.14);
-    --hint-cause: #64b5f6;
-    --hint-target: #42a5f5;
-    --hint-fill: rgba(66, 165, 245, 0.28);
+    --hint-region: rgba(100, 181, 246, 0.16);
+    --hint-cause: #ef5350;
+    --hint-target: #ffca28;
+    --hint-fill: rgba(255, 213, 79, 0.4);
     --hint-dim: rgba(255, 255, 255, 0.06);
+    --hint-box: #66bb6a;
     --btn-bg: transparent;
     --btn-hover: #333333;
     --btn-active: #0d47a1;
@@ -138,11 +140,12 @@ button {
         --highlight-selected: #0d47a1;
         --highlight-same-num: #1b3a1b;
         --selection-border: #42a5f5;
-        --hint-region: rgba(100, 181, 246, 0.14);
-        --hint-cause: #64b5f6;
-        --hint-target: #42a5f5;
-        --hint-fill: rgba(66, 165, 245, 0.28);
+        --hint-region: rgba(100, 181, 246, 0.16);
+        --hint-cause: #ef5350;
+        --hint-target: #ffca28;
+        --hint-fill: rgba(255, 213, 79, 0.4);
         --hint-dim: rgba(255, 255, 255, 0.06);
+        --hint-box: #66bb6a;
         --btn-bg: transparent;
         --btn-hover: #333333;
         --btn-active: #0d47a1;
@@ -1622,7 +1625,7 @@ class HintEngine {
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
                     // 简单情况：1 步完成（方法名 + 原理 + 结论，全部高亮合一）
-                    stepList.push({ text: '【唯一候选】' + this._cellName(ns.r, ns.c) + '（高亮格）所在的行、列、宫已出现其余 8 个数字（蓝色填充格），候选只剩 ' + ns.digit + '，因此必须填 ' + ns.digit, region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c), target: [ns.r, ns.c], targetDigit: ns.digit });
+                    stepList.push({ text: '【唯一候选】' + this._cellName(ns.r, ns.c) + '（高亮格）所在的行、列、宫已出现其余 8 个数字（黄底红框格），候选只剩 ' + ns.digit + '，因此必须填 ' + ns.digit, region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c), target: [ns.r, ns.c], targetDigit: ns.digit });
                 } else {
                     stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c], targetDigit: ns.digit });
                 }
@@ -1634,7 +1637,9 @@ class HintEngine {
                 const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    // 唯余法图示：原因格（蓝色填充）+ 各自带一行/列、目标宫整宫框选、已填格变灰、目标格同色高亮
+                    // 唯余法图示（按截图标记规范）：
+                    //   原因格(已填的 d) → 黄底红框 + 带出一整行/列蓝底；
+                    //   目标格 → 橙底；目标宫 → 绿粗框；其余已填格 → 灰底弱化。
                     const blocked = this._unitEmptyCells(grid, hs.unitType, hs.unitIndex)
                         .filter(([r, c]) => !(r === hs.r && c === hs.c) && !Validator.getCandidates(grid, r, c).includes(hs.digit));
                     const sources = [];
@@ -1644,16 +1649,15 @@ class HintEngine {
                             if (!seen.has(br * 9 + bc)) { seen.add(br * 9 + bc); sources.push([br, bc]); }
                         }
                     }
-                    // 原因格带线：与目标格同列 → 带整列；否则行差≥列差 → 带行，否则带列
+                    // 每个原因格带出的整行/整列（与目标格同列→带列；行差≥列差→带行，否则带列）
                     const lines = [];
                     for (const [br, bc] of sources) {
                         const type = bc === hs.c ? 'col' : Math.abs(br - hs.r) >= Math.abs(bc - hs.c) ? 'row' : 'col';
                         const idx = type === 'row' ? br : bc;
                         if (!lines.some(l => l.type === type && l.index === idx)) lines.push({ type, index: idx });
                     }
-                    // 目标宫框选
-                    const boxIdx = this._boxIndex(hs.r, hs.c);
-                    // 已填数字格变灰（目标所在单位内 + 目标宫内，除原因格/目标格外）
+                    // 已填格变灰：仅目标单位（行/列/宫）内除原因格/目标格外的已填格。
+                    // 不覆盖原因格带出的行/列——那些行列只显示蓝底，上面的其他数字保持原色。
                     const dimCells = [];
                     const dimSeen = new Set();
                     const addDim = (rr, cc) => {
@@ -1669,10 +1673,7 @@ class HintEngine {
                         for (let r = ubr; r < ubr + 3; r++)
                             for (let c = ubc; c < ubc + 3; c++) addDim(r, c);
                     }
-                    const gbr = Math.floor(hs.r / 3) * 3, gbc = Math.floor(hs.c / 3) * 3;
-                    for (let r = gbr; r < gbr + 3; r++)
-                        for (let c = gbc; c < gbc + 3; c++) addDim(r, c);
-                    stepList.push({ text: '【唯余法】' + unitDesc + '（高亮区域）中，除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（蓝色填充格）约束都不能填 ' + hs.digit + '，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, fillCells: sources, sourceLines: lines, boxFrame: boxIdx, dimCells, target: [hs.r, hs.c], targetDigit: hs.digit });
+                    stepList.push({ text: '【唯余法】' + unitDesc + '（高亮区域）中，除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（黄底红框格）约束都不能填 ' + hs.digit + '，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, region: { lines }, fillCells: sources, boxFrame: this._boxIndex(hs.r, hs.c), dimCells, target: [hs.r, hs.c], targetDigit: hs.digit });
                 } else {
                     stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c], targetDigit: hs.digit });
                 }
@@ -3616,7 +3617,7 @@ class Renderer {
         if (state.hintStep) {
             const hs = state.hintStep;
             const regionStyle = getComputedStyle(document.documentElement)
-                .getPropertyValue('--hint-region').trim() || 'rgba(255,213,79,0.22)';
+                .getPropertyValue('--hint-region').trim() || 'rgba(66,165,245,0.20)';
             ctx.fillStyle = regionStyle;
             if (hs.region) {
                 if (hs.region.type === 'row') {
@@ -3629,14 +3630,12 @@ class Renderer {
                     ctx.fillRect(bc * cs, br * cs, cs * 3, cs * 3);
                 } else if (hs.region.cells) {
                     for (const [r, c] of hs.region.cells) ctx.fillRect(c * cs, r * cs, cs, cs);
-                }
-            }
-            // 原因格带出的整行/整列（半透明，与区域同色）
-            if (hs.sourceLines && hs.sourceLines.length) {
-                ctx.fillStyle = regionStyle;
-                for (const line of hs.sourceLines) {
-                    if (line.type === 'row') ctx.fillRect(0, line.index * cs, cs * 9, cs);
-                    else ctx.fillRect(line.index * cs, 0, cs, cs * 9);
+                } else if (hs.region.lines) {
+                    // 唯余法：原因格带出的整行/整列（蓝底）
+                    for (const l of hs.region.lines) {
+                        if (l.type === 'row') ctx.fillRect(0, l.index * cs, cs * 9, cs);
+                        else ctx.fillRect(l.index * cs, 0, cs, cs * 9);
+                    }
                 }
             }
             // 已填数字格变灰（弱化，突出目标格）
@@ -3647,13 +3646,13 @@ class Renderer {
             }
             if (hs.fillCells && hs.fillCells.length) {
                 ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-fill').trim() || 'rgba(33,150,243,0.32)';
+                    .getPropertyValue('--hint-fill').trim() || 'rgba(255,213,79,0.50)';
                 for (const [r, c] of hs.fillCells) ctx.fillRect(c * cs, r * cs, cs, cs);
             }
             if (hs.target) {
-                // 目标格与原因格同色高亮
+                // 目标格：橙底高亮（与原因格黄底区分）
                 ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-fill').trim() || 'rgba(33,150,243,0.32)';
+                    .getPropertyValue('--hint-target').trim() || 'rgba(249,168,37,0.35)';
                 ctx.fillRect(hs.target[1] * cs, hs.target[0] * cs, cs, cs);
             }
         }
@@ -3752,7 +3751,7 @@ class Renderer {
             if (board.getCell(tr, tc) === 0) {
                 ctx.globalAlpha = state.hintFlash ? 1 : 0.2;
                 ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-target').trim() || '#2196f3';
+                    .getPropertyValue('--hint-target').trim() || '#f9a825';
                 ctx.font = `bold ${cs * 0.5 * scale}px ${family}`;
                 ctx.fillText(state.hintStep.targetDigit.toString(), tc * cs + cs / 2, tr * cs + cs / 2);
                 ctx.globalAlpha = 1;
@@ -3795,7 +3794,7 @@ class Renderer {
             }
         }
 
-        // 提示临时笔记：仅多步排除法步骤显示候选数字（蓝色小字，覆盖同位置正常笔记，不落盘）
+        // 提示临时笔记：仅多步排除法步骤显示候选数字（覆盖同位置正常笔记，不落盘）
         if (state.hintStep && state.hintStep.tempNotes) {
             const hs = state.hintStep;
             const tempCells = (hs.cells || []).concat(hs.target ? [hs.target] : []);
@@ -3828,7 +3827,7 @@ class Renderer {
             const causeStyle = getComputedStyle(document.documentElement)
                 .getPropertyValue('--hint-cause').trim() || '#f9a825';
             const targetStyle = getComputedStyle(document.documentElement)
-                .getPropertyValue('--hint-target').trim() || '#fbc02d';
+                .getPropertyValue('--hint-target').trim() || '#f9a825';
             if (hs.cells && hs.cells.length) {
                 ctx.strokeStyle = causeStyle;
                 ctx.lineWidth = 2;
@@ -3836,10 +3835,11 @@ class Renderer {
                     ctx.strokeRect(c * cs + 1, r * cs + 1, cs - 2, cs - 2);
                 }
             }
-            // 目标宫整宫框选（粗边框）
+            // 目标宫整宫框选（绿色粗边框）
             if (hs.boxFrame !== undefined && hs.boxFrame !== null) {
                 const br = Math.floor(hs.boxFrame / 3) * 3, bc = (hs.boxFrame % 3) * 3;
-                ctx.strokeStyle = targetStyle;
+                ctx.strokeStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-box').trim() || '#43a047';
                 ctx.lineWidth = 3.5;
                 ctx.strokeRect(bc * cs + 2, br * cs + 2, cs * 3 - 4, cs * 3 - 4);
             }
@@ -5321,7 +5321,7 @@ class SudokuGame {
                     const cands = Validator.getCandidates(this.board.grid, r, c);
                     explanation = '【候选分析】' + HintEngine._cellName(r, c) + '当前候选数为[' + cands.join(',') + ']，该格受行列宫多重交叉约束，需组合排除法推导。建议先用候选笔记辅助分析。';
                     steps = [
-                        { text: '【候选分析】' + HintEngine._cellName(r, c) + '（高亮格）的候选数字是 [' + cands.join(',') + ']，同时受所在行、列、宫的多重约束（蓝色填充格），当前没有单一技巧能直接确定', region: { cells: [[r, c]] }, fillCells: HintEngine._filledNeighbors(this.board.grid, r, c) },
+                        { text: '【候选分析】' + HintEngine._cellName(r, c) + '（高亮格）的候选数字是 [' + cands.join(',') + ']，同时受所在行、列、宫的多重约束（黄底红框格），当前没有单一技巧能直接确定', region: { cells: [[r, c]] }, fillCells: HintEngine._filledNeighbors(this.board.grid, r, c) },
                         { text: '建议先用一键笔记记录候选，再配合上面的技巧逐步推导' },
                     ];
                 }
@@ -5367,7 +5367,7 @@ class SudokuGame {
             else if (boxEmpty === 1) text = '【唯余法】该宫只剩这一格未填，必须填'+answer;
             else text = '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
             const steps = [
-                { text: '【' + (rowEmpty === 1 ? '唯余法' : colEmpty === 1 ? '唯余法' : boxEmpty === 1 ? '唯余法' : '唯一候选') + '】' + cellName + '（高亮格）所在的行已有[' + [...rowNums].join(',') + ']、列已有[' + [...colNums].join(',') + ']、宫已有[' + [...boxNums].join(',') + ']（蓝色填充格），只剩 ' + answer + ' 没出现过，因此必须填 ' + answer, region: { cells: [[row, col]] }, fillCells: filled, target: [row, col], targetDigit: answer },
+                { text: '【' + (rowEmpty === 1 ? '唯余法' : colEmpty === 1 ? '唯余法' : boxEmpty === 1 ? '唯余法' : '唯一候选') + '】' + cellName + '（高亮格）所在的行已有[' + [...rowNums].join(',') + ']、列已有[' + [...colNums].join(',') + ']、宫已有[' + [...boxNums].join(',') + ']（黄底红框格），只剩 ' + answer + ' 没出现过，因此必须填 ' + answer, region: { cells: [[row, col]] }, fillCells: filled, target: [row, col], targetDigit: answer },
             ];
             return { text, steps };
         }
