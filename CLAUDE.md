@@ -10,17 +10,15 @@
 
 ### 文件编辑
 - `index.html` 使用 **LF** 换行符（非 CRLF），已由 `.gitattributes` 锁定
-- **Edit 工具不可用于 index.html** — 文件内混合使用 Tab 和空格缩进，Read 输出带行号前缀后无法准确还原原始字符串，每次都匹配失败
-- **必须用 Python 脚本编辑 index.html**，这是唯一可靠的方式：
-  ```python
-  # 读取、替换、写回（保持 newline='' 不变更换行符）
-  with open('index.html', 'r', encoding='utf-8') as f:
-      content = f.read()
-  content = content.replace(old_string, new_string)
-  if content.count(old_string) == 1:  # 验证唯一匹配
-      with open('index.html', 'w', encoding='utf-8', newline='') as f:
-          f.write(content)
-  ```
+- **缩进情况（实测）**: SudokuGame 类方法为 4 空格缩进，HintEngine 类为 4 空格缩进；不要假设 tab
+- **Edit 工具在 index.html 上可以工作**（2026-08 实测多次成功），前提是 old_string 与文件字节完全一致——遇到失败先用 `python -c` 读字节定位确切缩进，不要凭 Read 输出猜测
+- Python 脚本编辑要点：
+  - 读写必须 `encoding='utf-8'`，写回 `newline=''` 保持 LF
+  - **绝对不要用 raw string（`r'''...'''`）包含 JS 代码**——`\n` 会变成字面字符导致 JS 语法错误
+  - 替换前 `assert content.count(old) == 1` 验证唯一
+  - 用切片重排内容时（如替换整个类），**所有索引必须在原 content 上先算好再操作**，任何一步修改后再用旧索引都会错位
+  - 改完必须跑 `node --check`（提取 `<script>` 块：`re.findall(r'<script>([\s\S]*?)</script>', html)`）
+- 破坏性修复时可用 `git checkout HEAD -- index.html` 恢复（先确认工作区没有别的未提交改动）
 - 小文件（.java, .xml, .md）可以用 Edit 工具
 
 ### 不需要的注释和行为
@@ -32,12 +30,16 @@
 
 ```
 sudoku-pure/
-├── index.html          # 主游戏文件（~3700行，单文件HTML）
+├── index.html          # 主游戏文件（~5000行，单文件HTML，含 LEVEL_PACK）
 ├── sudoku-pure.apk     # 最终签名的 APK
+├── build_apk.sh        # 一键构建 APK 脚本（bash build_apk.sh）
+├── SUDOKU_TECHNIQUES.md # 数独技巧汉化参考文档（28 项，HoDoKu 分类）
+├── gen_levels.js       # Node 重新生成内置题库（输出 level_pack.js）
+├── gen_icon.py         # 重新生成全部图标资源
 ├── manifest.json       # PWA manifest
 ├── sw.js              # Service Worker
 ├── APK-ISSUES.md      # APK 问题记录和修复日志
-├── puzzles.json       # 备用题库数据
+├── IMPROVEMENTS.md    # 改进方向清单（含 checkbox 待用户确认）
 └── apk-project/       # APK 构建源码
     ├── AndroidManifest.xml
     ├── assets/index.html    # 构建前需从根目录同步
@@ -59,15 +61,17 @@ sudoku-pure/
 
 ### APK 构建步骤（快速参考）
 ```bash
-# 路径变量
+# 一键构建（同步 assets → aapt2 → javac → d8 → aapt add → zipalign → apksigner → 拷贝到根目录）
+bash build_apk.sh
+```
+手动分步路径变量（已在 build_apk.sh 内写死，如无特殊需要直接用脚本）：
+```bash
 SDK="D:/workspace/Sudoku/android-sdk"; BUILD_TOOLS="$SDK/build-tools/34.0.0"
 PLATFORM="$SDK/platforms/android-34"; PROJ="apk-project"; OUTDIR="$PROJ/build2"
 JAVA="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_17.0.7.v20230425-1502/jre/bin/java"
 JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjdk.hotspot.jre.full.win32.x86_64_17.0.7.v20230425-1502/jre/bin/javac"
-# 1. mkdir -p $OUTDIR/assets && cp index.html $OUTDIR/assets/
-# 2. aapt2 compile → link → javac → d8(com.android.tools.r8.D8,传所有class) → aapt add → zipalign → apksigner
 ```
-完整步骤见下方"APK 构建要点"。
+完整要点见下方"APK 构建要点"。
 
 ## 测试环境
 
@@ -88,6 +92,14 @@ JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjd
 - **返回键**: 游戏中→主页，暂停中→关闭暂停，关卡页→选关Tab，其他Tab→主页Tab，主页→退出
 - **主题**: 支持跟随系统/浅色/深色三种模式（`data-theme` 属性）
   - `_applyTheme()` 方法统一处理主题切换并同步状态栏颜色
+- **提示引擎 `HintEngine`**（核心类，位于 Solver 之后）:
+  - 技巧阶梯（findMove 循环）：唯一候选→唯余法→宫内排除→数对→三链数→隐数对→X-Wing→Swordfish→摩天楼→风筝→单色链→XY-Wing
+  - 解释统一带 `【技巧名】` 前缀，措辞用"必须填"，禁用"推荐"
+  - 全部技巧找不到时 `findMoveWithContradiction()` 对双候选格做矛盾试探（Nishio），确定"必须填"的值
+  - `useHint()` 先用引擎，校验 digit 与解答一致（防止盘面有误导致推导错误），否则回退 `_buildHintReason`（仅裸单/隐单），最后走矛盾试探
+  - 冒烟测试脚本模式：提取 script 块 → eval + `({classes})` → 用 LEVEL_PACK 逐关求解验证
+- **锁屏/切后台自动暂停**: `visibilitychange` hidden 时 `_save()` + `pause(true)`（静默暂停，不播声音），Timer 用 setInterval 计数
+- **数字键盘**: hover 样式必须包在 `@media (hover: hover) and (pointer: fine)` 内，否则触屏点击后蓝框残留（sticky hover）
 - **工具脚本**:
   - `gen_levels.js`: Node 重新生成内置题库（输出 level_pack.js，需手动嵌入 index.html 替换 LEVEL_PACK）
   - `gen_icon.py`: 重新生成全部图标资源（矢量 XML + 各密度 PNG）
