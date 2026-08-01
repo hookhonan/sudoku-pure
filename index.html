@@ -3219,20 +3219,24 @@ class DailyManager {
 }
 
 // === js/game/hints.js ===
+// 测试模式：URL 带 ?unlimited 时取消每局提示次数限制（仅浏览器测试用，APK 内永不触发）
+const HINT_UNLIMITED = typeof location !== 'undefined' && /[?&]unlimited/.test(location.search);
+
 class Hints {
     constructor() {
-        this.remaining = 3;
+        this.remaining = HINT_UNLIMITED ? 999 : 3;
         this.autoNoteUsed = false;
         this.autoNoteCleared = false;
     }
 
     reset() {
-        this.remaining = 3;
+        this.remaining = HINT_UNLIMITED ? 999 : 3;
         this.autoNoteUsed = false;
         this.autoNoteCleared = false;
     }
 
     use() {
+        if (HINT_UNLIMITED) return true;
         if (this.remaining <= 0) return false;
         this.remaining--;
         return true;
@@ -4679,7 +4683,7 @@ class SudokuGame {
         this.noteMode = saved.noteMode || false;
         this.selectedRow = saved.selectedRow;
         this.selectedCol = saved.selectedCol;
-        this.hints.remaining = saved.hintRemaining ?? 3;
+        this.hints.remaining = HINT_UNLIMITED ? 999 : (saved.hintRemaining ?? 3);
         this.hints.autoNoteUsed = saved.autoNoteUsed ?? false;
         this.hints.autoNoteCleared = saved.autoNoteCleared ?? false;
         this.lives = saved.lives ?? this.maxLives;
@@ -5441,7 +5445,7 @@ class SudokuGame {
         const hintBtn = document.getElementById('btn-hint');
         const remaining = this.hints.getRemaining();
         const hintLabel = document.getElementById('hint-count');
-        if (hintLabel) hintLabel.textContent = remaining;
+        if (hintLabel) hintLabel.textContent = HINT_UNLIMITED ? '∞' : remaining;
         if (remaining <= 0) {
             hintBtn.classList.add('disabled');
         } else {
