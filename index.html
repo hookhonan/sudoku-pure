@@ -60,10 +60,11 @@ button {
     --highlight-selected: #bbdefb;
     --highlight-same-num: #c8e6c9;
     --selection-border: #1976d2;
-    --hint-region: rgba(255, 213, 79, 0.22);
-    --hint-cause: #f9a825;
-    --hint-target: #fbc02d;
-    --hint-fill: rgba(255, 152, 0, 0.28);
+    --hint-region: rgba(66, 165, 245, 0.16);
+    --hint-cause: #1e88e5;
+    --hint-target: #2196f3;
+    --hint-fill: rgba(33, 150, 243, 0.32);
+    --hint-dim: rgba(0, 0, 0, 0.07);
     --btn-bg: transparent;
     --btn-hover: #f0f0f0;
     --btn-active: #e3f2fd;
@@ -97,10 +98,11 @@ button {
     --highlight-selected: #0d47a1;
     --highlight-same-num: #1b3a1b;
     --selection-border: #42a5f5;
-    --hint-region: rgba(255, 213, 79, 0.15);
-    --hint-cause: #ffca28;
-    --hint-target: #ffd54f;
-    --hint-fill: rgba(255, 183, 77, 0.22);
+    --hint-region: rgba(100, 181, 246, 0.14);
+    --hint-cause: #64b5f6;
+    --hint-target: #42a5f5;
+    --hint-fill: rgba(66, 165, 245, 0.28);
+    --hint-dim: rgba(255, 255, 255, 0.06);
     --btn-bg: transparent;
     --btn-hover: #333333;
     --btn-active: #0d47a1;
@@ -136,10 +138,11 @@ button {
         --highlight-selected: #0d47a1;
         --highlight-same-num: #1b3a1b;
         --selection-border: #42a5f5;
-        --hint-region: rgba(255, 213, 79, 0.15);
-        --hint-cause: #ffca28;
-        --hint-target: #ffd54f;
-        --hint-fill: rgba(255, 183, 77, 0.22);
+        --hint-region: rgba(100, 181, 246, 0.14);
+        --hint-cause: #64b5f6;
+        --hint-target: #42a5f5;
+        --hint-fill: rgba(66, 165, 245, 0.28);
+        --hint-dim: rgba(255, 255, 255, 0.06);
         --btn-bg: transparent;
         --btn-hover: #333333;
         --btn-active: #0d47a1;
@@ -1619,9 +1622,9 @@ class HintEngine {
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
                     // 简单情况：1 步完成（方法名 + 原理 + 结论，全部高亮合一）
-                    stepList.push({ text: '【唯一候选】' + this._cellName(ns.r, ns.c) + '（高亮格）所在的行、列、宫已出现其余 8 个数字（橙色填充格），候选只剩 ' + ns.digit + '，因此必须填 ' + ns.digit, region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c), target: [ns.r, ns.c] });
+                    stepList.push({ text: '【唯一候选】' + this._cellName(ns.r, ns.c) + '（高亮格）所在的行、列、宫已出现其余 8 个数字（蓝色填充格），候选只剩 ' + ns.digit + '，因此必须填 ' + ns.digit, region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c), target: [ns.r, ns.c], targetDigit: ns.digit });
                 } else {
-                    stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c] });
+                    stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c], targetDigit: ns.digit });
                 }
                 const desc = '【唯一候选】' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
                 return { r: ns.r, c: ns.c, digit: ns.digit, explanation: desc, steps: stepList };
@@ -1631,7 +1634,7 @@ class HintEngine {
                 const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    // 排除格（不能填 d 的空格）+ 约束源（已填的 d 格）一起高亮；1 步完成
+                    // 唯余法图示：原因格（蓝色填充）+ 各自带一行/列、目标宫整宫框选、已填格变灰、目标格同色高亮
                     const blocked = this._unitEmptyCells(grid, hs.unitType, hs.unitIndex)
                         .filter(([r, c]) => !(r === hs.r && c === hs.c) && !Validator.getCandidates(grid, r, c).includes(hs.digit));
                     const sources = [];
@@ -1641,9 +1644,37 @@ class HintEngine {
                             if (!seen.has(br * 9 + bc)) { seen.add(br * 9 + bc); sources.push([br, bc]); }
                         }
                     }
-                    stepList.push({ text: '【唯余法】' + unitDesc + '（高亮区域）中，除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（橙色填充格）约束都不能填 ' + hs.digit + '，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, cells: blocked, fillCells: sources, target: [hs.r, hs.c] });
+                    // 原因格带线：与目标格同列 → 带整列；否则行差≥列差 → 带行，否则带列
+                    const lines = [];
+                    for (const [br, bc] of sources) {
+                        const type = bc === hs.c ? 'col' : Math.abs(br - hs.r) >= Math.abs(bc - hs.c) ? 'row' : 'col';
+                        const idx = type === 'row' ? br : bc;
+                        if (!lines.some(l => l.type === type && l.index === idx)) lines.push({ type, index: idx });
+                    }
+                    // 目标宫框选
+                    const boxIdx = this._boxIndex(hs.r, hs.c);
+                    // 已填数字格变灰（目标所在单位内 + 目标宫内，除原因格/目标格外）
+                    const dimCells = [];
+                    const dimSeen = new Set();
+                    const addDim = (rr, cc) => {
+                        if (grid[rr][cc] !== 0 && !seen.has(rr * 9 + cc) && !(rr === hs.r && cc === hs.c) && !dimSeen.has(rr * 9 + cc)) {
+                            dimSeen.add(rr * 9 + cc);
+                            dimCells.push([rr, cc]);
+                        }
+                    };
+                    if (hs.unitType === 'row') for (let c = 0; c < 9; c++) addDim(hs.unitIndex, c);
+                    else if (hs.unitType === 'col') for (let r = 0; r < 9; r++) addDim(r, hs.unitIndex);
+                    else {
+                        const ubr = Math.floor(hs.unitIndex / 3) * 3, ubc = (hs.unitIndex % 3) * 3;
+                        for (let r = ubr; r < ubr + 3; r++)
+                            for (let c = ubc; c < ubc + 3; c++) addDim(r, c);
+                    }
+                    const gbr = Math.floor(hs.r / 3) * 3, gbc = Math.floor(hs.c / 3) * 3;
+                    for (let r = gbr; r < gbr + 3; r++)
+                        for (let c = gbc; c < gbc + 3; c++) addDim(r, c);
+                    stepList.push({ text: '【唯余法】' + unitDesc + '（高亮区域）中，除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（蓝色填充格）约束都不能填 ' + hs.digit + '，因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, fillCells: sources, sourceLines: lines, boxFrame: boxIdx, dimCells, target: [hs.r, hs.c], targetDigit: hs.digit });
                 } else {
-                    stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c] });
+                    stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c], targetDigit: hs.digit });
                 }
                 const desc = '【唯余法】' + unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
                 return { r: hs.r, c: hs.c, digit: hs.digit, explanation: desc, steps: stepList };
@@ -1654,7 +1685,8 @@ class HintEngine {
                 || this._findSimpleColoring(cands) || this._findXYWing(cands);
             if (!adv || adv.elim.length === 0) return null;
             for (const e of adv.elim) cands[e.r][e.c].delete(e.digit);
-            steps.push({ text: adv.desc, region: adv.region, cells: adv.patternCells });
+            // tempNotes: 多步排除法步骤在框选格内显示临时候选数字（简单方法不显示）
+            steps.push({ text: adv.desc, region: adv.region, cells: adv.patternCells, tempNotes: true });
         }
         return null;
     }
@@ -1679,7 +1711,7 @@ class HintEngine {
                             steps: [
                                 { text: '【矛盾试探】先假设' + this._cellName(r, c) + '填 ' + trial, region: { cells: [[r, c]] } },
                                 { text: '顺着唯一候选/唯余法推导，' + this._cellName(contradiction[0], contradiction[1]) + '将没有任何可填的数字，与数独规则矛盾', cells: [contradiction] },
-                                { text: '所以假设不成立，' + this._cellName(r, c) + '必须填 ' + answer, target: [r, c] },
+                                { text: '所以假设不成立，' + this._cellName(r, c) + '必须填 ' + answer, target: [r, c], targetDigit: answer },
                             ]
                         };
                     }
@@ -3599,14 +3631,29 @@ class Renderer {
                     for (const [r, c] of hs.region.cells) ctx.fillRect(c * cs, r * cs, cs, cs);
                 }
             }
+            // 原因格带出的整行/整列（半透明，与区域同色）
+            if (hs.sourceLines && hs.sourceLines.length) {
+                ctx.fillStyle = regionStyle;
+                for (const line of hs.sourceLines) {
+                    if (line.type === 'row') ctx.fillRect(0, line.index * cs, cs * 9, cs);
+                    else ctx.fillRect(line.index * cs, 0, cs, cs * 9);
+                }
+            }
+            // 已填数字格变灰（弱化，突出目标格）
+            if (hs.dimCells && hs.dimCells.length) {
+                ctx.fillStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-dim').trim() || 'rgba(0,0,0,0.07)';
+                for (const [r, c] of hs.dimCells) ctx.fillRect(c * cs, r * cs, cs, cs);
+            }
             if (hs.fillCells && hs.fillCells.length) {
                 ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-fill').trim() || 'rgba(255,152,0,0.28)';
+                    .getPropertyValue('--hint-fill').trim() || 'rgba(33,150,243,0.32)';
                 for (const [r, c] of hs.fillCells) ctx.fillRect(c * cs, r * cs, cs, cs);
             }
             if (hs.target) {
+                // 目标格与原因格同色高亮
                 ctx.fillStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-target').trim() || 'rgba(251,192,45,0.35)';
+                    .getPropertyValue('--hint-fill').trim() || 'rgba(33,150,243,0.32)';
                 ctx.fillRect(hs.target[1] * cs, hs.target[0] * cs, cs, cs);
             }
         }
@@ -3698,6 +3745,19 @@ class Renderer {
                 ctx.fillText(val.toString(), c * cs + cs / 2, r * cs + cs / 2);
             }
         }
+
+        // 提示目标格：空格上闪烁显示待填数字
+        if (state.hintStep && state.hintStep.target && state.hintStep.targetDigit) {
+            const [tr, tc] = state.hintStep.target;
+            if (board.getCell(tr, tc) === 0) {
+                ctx.globalAlpha = state.hintFlash ? 1 : 0.2;
+                ctx.fillStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-target').trim() || '#2196f3';
+                ctx.font = `bold ${cs * 0.5 * scale}px ${family}`;
+                ctx.fillText(state.hintStep.targetDigit.toString(), tc * cs + cs / 2, tr * cs + cs / 2);
+                ctx.globalAlpha = 1;
+            }
+        }
     }
 
     _drawNotes(ctx, board, state) {
@@ -3735,13 +3795,13 @@ class Renderer {
             }
         }
 
-        // 提示临时笔记：高亮框内显示候选数字（橙色小字，覆盖同位置正常笔记，不落盘）
-        if (state.hintStep) {
+        // 提示临时笔记：仅多步排除法步骤显示候选数字（蓝色小字，覆盖同位置正常笔记，不落盘）
+        if (state.hintStep && state.hintStep.tempNotes) {
             const hs = state.hintStep;
             const tempCells = (hs.cells || []).concat(hs.target ? [hs.target] : []);
             if (tempCells.length) {
                 const hintNoteStyle = getComputedStyle(document.documentElement)
-                    .getPropertyValue('--hint-cause').trim() || '#f9a825';
+                    .getPropertyValue('--hint-cause').trim() || '#1e88e5';
                 const third = cs / 3;
                 for (const [r, c] of tempCells) {
                     if (board.getCell(r, c) !== 0) continue;
@@ -3775,6 +3835,13 @@ class Renderer {
                 for (const [r, c] of hs.cells) {
                     ctx.strokeRect(c * cs + 1, r * cs + 1, cs - 2, cs - 2);
                 }
+            }
+            // 目标宫整宫框选（粗边框）
+            if (hs.boxFrame !== undefined && hs.boxFrame !== null) {
+                const br = Math.floor(hs.boxFrame / 3) * 3, bc = (hs.boxFrame % 3) * 3;
+                ctx.strokeStyle = targetStyle;
+                ctx.lineWidth = 3.5;
+                ctx.strokeRect(bc * cs + 2, br * cs + 2, cs * 3 - 4, cs * 3 - 4);
             }
             if (hs.target) {
                 ctx.strokeStyle = targetStyle;
@@ -4468,6 +4535,8 @@ class SudokuGame {
         this.completed = false;
         this.hintCell = null;
         this.hintStep = null;
+        this._hintFlash = true;
+        this._hintFlashTimer = null;
         this.sameNumHighlight = null;
 
         this._init();
@@ -4929,6 +4998,8 @@ class SudokuGame {
         this.completed = false;
         this.hintCell = null;
         this.hintStep = null;
+        this._hintFlash = true;
+        this._hintFlashTimer = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
         this.lives = this.maxLives;
@@ -5250,7 +5321,7 @@ class SudokuGame {
                     const cands = Validator.getCandidates(this.board.grid, r, c);
                     explanation = '【候选分析】' + HintEngine._cellName(r, c) + '当前候选数为[' + cands.join(',') + ']，该格受行列宫多重交叉约束，需组合排除法推导。建议先用候选笔记辅助分析。';
                     steps = [
-                        { text: '【候选分析】' + HintEngine._cellName(r, c) + '（高亮格）的候选数字是 [' + cands.join(',') + ']，同时受所在行、列、宫的多重约束（橙色填充格），当前没有单一技巧能直接确定', region: { cells: [[r, c]] }, fillCells: HintEngine._filledNeighbors(this.board.grid, r, c) },
+                        { text: '【候选分析】' + HintEngine._cellName(r, c) + '（高亮格）的候选数字是 [' + cands.join(',') + ']，同时受所在行、列、宫的多重约束（蓝色填充格），当前没有单一技巧能直接确定', region: { cells: [[r, c]] }, fillCells: HintEngine._filledNeighbors(this.board.grid, r, c) },
                         { text: '建议先用一键笔记记录候选，再配合上面的技巧逐步推导' },
                     ];
                 }
@@ -5296,7 +5367,7 @@ class SudokuGame {
             else if (boxEmpty === 1) text = '【唯余法】该宫只剩这一格未填，必须填'+answer;
             else text = '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
             const steps = [
-                { text: '【' + (rowEmpty === 1 ? '唯余法' : colEmpty === 1 ? '唯余法' : boxEmpty === 1 ? '唯余法' : '唯一候选') + '】' + cellName + '（高亮格）所在的行已有[' + [...rowNums].join(',') + ']、列已有[' + [...colNums].join(',') + ']、宫已有[' + [...boxNums].join(',') + ']（橙色填充格），只剩 ' + answer + ' 没出现过，因此必须填 ' + answer, region: { cells: [[row, col]] }, fillCells: filled, target: [row, col] },
+                { text: '【' + (rowEmpty === 1 ? '唯余法' : colEmpty === 1 ? '唯余法' : boxEmpty === 1 ? '唯余法' : '唯一候选') + '】' + cellName + '（高亮格）所在的行已有[' + [...rowNums].join(',') + ']、列已有[' + [...colNums].join(',') + ']、宫已有[' + [...boxNums].join(',') + ']（蓝色填充格），只剩 ' + answer + ' 没出现过，因此必须填 ' + answer, region: { cells: [[row, col]] }, fillCells: filled, target: [row, col], targetDigit: answer },
             ];
             return { text, steps };
         }
@@ -5605,6 +5676,19 @@ class SudokuGame {
         this._hintSteps = steps && steps.length ? steps : null;
         this._hintStepIndex = 0;
 
+        // 目标格数字闪烁动画（300ms 交替 + 重绘）
+        if (this._hintFlashTimer) clearInterval(this._hintFlashTimer);
+        this._hintFlash = true;
+        this._hintFlashTimer = setInterval(() => {
+            if (!this._hintSteps) {
+                clearInterval(this._hintFlashTimer);
+                this._hintFlashTimer = null;
+                return;
+            }
+            this._hintFlash = !this._hintFlash;
+            this._render();
+        }, 300);
+
         const renderStep = () => {
             const idx = this._hintStepIndex;
             const total = this._hintSteps ? this._hintSteps.length : 1;
@@ -5701,6 +5785,10 @@ class SudokuGame {
         this.hintStep = null;
         this._hintSteps = null;
         this._hintStepIndex = 0;
+        if (this._hintFlashTimer) {
+            clearInterval(this._hintFlashTimer);
+            this._hintFlashTimer = null;
+        }
         if (hintEl) {
             hintEl.style.display = 'none';
             hintEl.style.bottom = '';
@@ -5923,6 +6011,7 @@ class SudokuGame {
             sameNumHighlight: this.sameNumHighlight,
             hintCell: this.hintCell,
             hintStep: this.hintStep,
+            hintFlash: this._hintFlash,
             boldNoteNum: this._getBoldNoteNum(),
         };
         this.renderer.draw(this.board, state);
