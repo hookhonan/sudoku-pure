@@ -63,6 +63,7 @@ button {
     --hint-region: rgba(255, 213, 79, 0.22);
     --hint-cause: #f9a825;
     --hint-target: #fbc02d;
+    --hint-fill: rgba(255, 152, 0, 0.28);
     --btn-bg: transparent;
     --btn-hover: #f0f0f0;
     --btn-active: #e3f2fd;
@@ -99,6 +100,7 @@ button {
     --hint-region: rgba(255, 213, 79, 0.15);
     --hint-cause: #ffca28;
     --hint-target: #ffd54f;
+    --hint-fill: rgba(255, 183, 77, 0.22);
     --btn-bg: transparent;
     --btn-hover: #333333;
     --btn-active: #0d47a1;
@@ -137,6 +139,7 @@ button {
         --hint-region: rgba(255, 213, 79, 0.15);
         --hint-cause: #ffca28;
         --hint-target: #ffd54f;
+        --hint-fill: rgba(255, 183, 77, 0.22);
         --btn-bg: transparent;
         --btn-hover: #333333;
         --btn-active: #0d47a1;
@@ -1570,6 +1573,21 @@ class HintEngine {
         return cells;
     }
 
+    // 造成 (r,c) 不能填 d 的已填数字格（同行/同列/同宫的 d，去重）——因果填充高亮
+    static _blockingCells(grid, r, c, d) {
+        const cells = [];
+        const seen = new Set();
+        for (let i = 0; i < 9; i++) {
+            if (grid[r][i] === d && i !== c && !seen.has(r * 9 + i)) { seen.add(r * 9 + i); cells.push([r, i]); }
+            if (grid[i][c] === d && i !== r && !seen.has(i * 9 + c)) { seen.add(i * 9 + c); cells.push([i, c]); }
+        }
+        const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+        for (let rr = br; rr < br + 3; rr++)
+            for (let cc = bc; cc < bc + 3; cc++)
+                if (grid[rr][cc] === d && !(rr === r && cc === c) && !seen.has(rr * 9 + cc)) { seen.add(rr * 9 + cc); cells.push([rr, cc]); }
+        return cells;
+    }
+
     static findMove(grid) {
         const cands = [];
         for (let r = 0; r < 9; r++) {
@@ -1587,8 +1605,8 @@ class HintEngine {
             if (ns) {
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    stepList.push({ text: '注意' + this._cellName(ns.r, ns.c) + '（高亮格），它的候选数字只剩 ' + ns.digit + ' 一个', region: { cells: [[ns.r, ns.c]] } });
-                    stepList.push({ text: '该格所在的行、列、宫已经出现了其余 8 个数字', cells: this._filledNeighbors(grid, ns.r, ns.c) });
+                    // 简单情况：2 步（注意+因果合并 → 结论），不强行三步
+                    stepList.push({ text: '注意' + this._cellName(ns.r, ns.c) + '（高亮格）：它所在的行、列、宫已经出现了其余 8 个数字，候选数字只剩 ' + ns.digit + ' 一个', region: { cells: [[ns.r, ns.c]] }, fillCells: this._filledNeighbors(grid, ns.r, ns.c) });
                 }
                 stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c] });
                 const desc = '【唯一候选】' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
@@ -1599,8 +1617,17 @@ class HintEngine {
                 const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    stepList.push({ text: '注意' + unitDesc + '（高亮区域）', region: { type: hs.unitType, index: hs.unitIndex } });
-                    stepList.push({ text: unitDesc + '中除了' + this._cellName(hs.r, hs.c) + '，其他空格受所在列、宫的数字 ' + hs.digit + ' 约束，都不能填 ' + hs.digit, cells: this._unitEmptyCells(grid, hs.unitType, hs.unitIndex).filter(([r, c]) => !(r === hs.r && c === hs.c)) });
+                    // 排除格（不能填 d 的空格）+ 约束源（已填的 d 格）一起高亮
+                    const blocked = this._unitEmptyCells(grid, hs.unitType, hs.unitIndex)
+                        .filter(([r, c]) => !(r === hs.r && c === hs.c) && !Validator.getCandidates(grid, r, c).includes(hs.digit));
+                    const sources = [];
+                    const seen = new Set();
+                    for (const [r, c] of blocked) {
+                        for (const [br, bc] of this._blockingCells(grid, r, c, hs.digit)) {
+                            if (!seen.has(br * 9 + bc)) { seen.add(br * 9 + bc); sources.push([br, bc]); }
+                        }
+                    }
+                    stepList.push({ text: '注意' + unitDesc + '（高亮区域）：其中除' + this._cellName(hs.r, hs.c) + '外，其他空格受所在列、宫的数字 ' + hs.digit + '（橙色填充格）约束，都不能填 ' + hs.digit, region: { type: hs.unitType, index: hs.unitIndex }, cells: blocked, fillCells: sources });
                 }
                 stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c] });
                 const desc = '【唯余法】' + unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
@@ -3557,6 +3584,11 @@ class Renderer {
                     for (const [r, c] of hs.region.cells) ctx.fillRect(c * cs, r * cs, cs, cs);
                 }
             }
+            if (hs.fillCells && hs.fillCells.length) {
+                ctx.fillStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-fill').trim() || 'rgba(255,152,0,0.28)';
+                for (const [r, c] of hs.fillCells) ctx.fillRect(c * cs, r * cs, cs, cs);
+            }
             if (hs.target) {
                 ctx.fillStyle = getComputedStyle(document.documentElement)
                     .getPropertyValue('--hint-target').trim() || 'rgba(251,192,45,0.35)';
@@ -5227,8 +5259,7 @@ class SudokuGame {
             else if (boxEmpty === 1) text = '【唯余法】该宫只剩这一格未填，必须填'+answer;
             else text = '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
             const steps = [
-                { text: '注意' + cellName + '（高亮格），它所在的这一行、列、宫只剩一个候选数字 ' + answer, region: { cells: [[row, col]] } },
-                { text: '该格所在的行已有[' + [...rowNums].join(',') + ']，列已有[' + [...colNums].join(',') + ']，宫已有[' + [...boxNums].join(',') + ']，只有 ' + answer + ' 没有出现过', cells: filled },
+                { text: '注意' + cellName + '（高亮格）：它所在的行已有[' + [...rowNums].join(',') + ']，列已有[' + [...colNums].join(',') + ']，宫已有[' + [...boxNums].join(',') + ']（橙色填充格），只有 ' + answer + ' 没有出现过', region: { cells: [[row, col]] }, fillCells: filled },
                 { text: '因此' + cellName + '必须填 ' + answer, target: [row, col] },
             ];
             return { text, steps };
