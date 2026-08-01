@@ -60,6 +60,9 @@ button {
     --highlight-selected: #bbdefb;
     --highlight-same-num: #c8e6c9;
     --selection-border: #1976d2;
+    --hint-region: rgba(255, 213, 79, 0.22);
+    --hint-cause: #f9a825;
+    --hint-target: #fbc02d;
     --btn-bg: transparent;
     --btn-hover: #f0f0f0;
     --btn-active: #e3f2fd;
@@ -93,6 +96,9 @@ button {
     --highlight-selected: #0d47a1;
     --highlight-same-num: #1b3a1b;
     --selection-border: #42a5f5;
+    --hint-region: rgba(255, 213, 79, 0.15);
+    --hint-cause: #ffca28;
+    --hint-target: #ffd54f;
     --btn-bg: transparent;
     --btn-hover: #333333;
     --btn-active: #0d47a1;
@@ -128,6 +134,9 @@ button {
         --highlight-selected: #0d47a1;
         --highlight-same-num: #1b3a1b;
         --selection-border: #42a5f5;
+        --hint-region: rgba(255, 213, 79, 0.15);
+        --hint-cause: #ffca28;
+        --hint-target: #ffd54f;
         --btn-bg: transparent;
         --btn-hover: #333333;
         --btn-active: #0d47a1;
@@ -885,6 +894,22 @@ body {
     width: auto;
     min-width: 280px;
 }
+.smart-hint-steps {
+    flex: 1 1 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+.smart-hint-step-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--btn-disabled);
+    display: inline-block;
+}
+.smart-hint-step-dot.active { background: var(--num-user); }
 .smart-hint-text {
     flex: 1 1 100%;
     font-weight: 600;
@@ -893,6 +918,22 @@ body {
     overflow-wrap: break-word;
     max-height: 30vh;
     overflow-y: auto;
+}
+.smart-hint-nav {
+    flex: 1 1 100%;
+    display: flex;
+    gap: 8px;
+}
+.smart-hint-prev {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--diff-btn-bg);
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    min-width: 72px;
 }
 .smart-hint-btn {
     padding: 8px 20px;
@@ -1147,8 +1188,12 @@ body {
     <canvas id="board-canvas"></canvas>
     <div id="hint-backdrop"></div>
         <div id="smart-hint" style="display:none">
+        <div class="smart-hint-steps" id="smart-hint-steps"></div>
         <div class="smart-hint-text" id="smart-hint-reason"></div>
-        <button class="smart-hint-btn" id="smart-hint-apply">应用</button>
+        <div class="smart-hint-nav">
+            <button class="smart-hint-prev" id="smart-hint-prev">上一步</button>
+            <button class="smart-hint-btn" id="smart-hint-apply">应用</button>
+        </div>
         <button class="smart-hint-close" id="smart-hint-close">×</button>
     </div>
 </div>
@@ -1487,6 +1532,44 @@ class HintEngine {
 
     static _boxIndex(r, c) { return Math.floor(r / 3) * 3 + Math.floor(c / 3); }
 
+    // 同行/列/宫已填数字的格（唯一候选/唯余法的因果格，去重）
+    static _filledNeighbors(grid, r, c) {
+        const cells = [];
+        const seen = new Set();
+        for (let i = 0; i < 9; i++) {
+            for (const [rr, cc] of [[r, i], [i, c]]) {
+                if (grid[rr][cc] !== 0 && !(rr === r && cc === c) && !seen.has(rr * 9 + cc)) {
+                    seen.add(rr * 9 + cc);
+                    cells.push([rr, cc]);
+                }
+            }
+        }
+        const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
+        for (let rr = br; rr < br + 3; rr++)
+            for (let cc = bc; cc < bc + 3; cc++)
+                if (grid[rr][cc] !== 0 && !(rr === r && cc === c) && !seen.has(rr * 9 + cc)) {
+                    seen.add(rr * 9 + cc);
+                    cells.push([rr, cc]);
+                }
+        return cells;
+    }
+
+    // 单位内空格（唯余法的排除格，用于因果高亮）
+    static _unitEmptyCells(grid, type, index) {
+        const cells = [];
+        if (type === 'row') {
+            for (let c = 0; c < 9; c++) if (grid[index][c] === 0) cells.push([index, c]);
+        } else if (type === 'col') {
+            for (let r = 0; r < 9; r++) if (grid[r][index] === 0) cells.push([r, index]);
+        } else {
+            const br = Math.floor(index / 3) * 3, bc = (index % 3) * 3;
+            for (let r = br; r < br + 3; r++)
+                for (let c = bc; c < bc + 3; c++)
+                    if (grid[r][c] === 0) cells.push([r, c]);
+        }
+        return cells;
+    }
+
     static findMove(grid) {
         const cands = [];
         for (let r = 0; r < 9; r++) {
@@ -1497,27 +1580,31 @@ class HintEngine {
             cands.push(row);
         }
 
+        // steps: [{ text, region?, cells?, target? }] — 分步提示（sudoku.com 式）
         const steps = [];
         for (let iter = 0; iter < 40; iter++) {
             const ns = this._findNakedSingle(cands);
             if (ns) {
-                let desc;
-                if (steps.length === 0) {
-                    desc = '【唯一候选】此格所在的行、列、宫已出现其他数字，只剩 ' + ns.digit + ' 可填';
-                } else {
-                    desc = steps.join('；') + ' → 排除后，' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
+                const stepList = steps.slice();
+                if (stepList.length === 0) {
+                    stepList.push({ text: '注意' + this._cellName(ns.r, ns.c) + '（高亮格），它的候选数字只剩 ' + ns.digit + ' 一个', region: { cells: [[ns.r, ns.c]] } });
+                    stepList.push({ text: '该格所在的行、列、宫已经出现了其余 8 个数字', cells: this._filledNeighbors(grid, ns.r, ns.c) });
                 }
-                return { r: ns.r, c: ns.c, digit: ns.digit, explanation: desc };
+                stepList.push({ text: '因此' + this._cellName(ns.r, ns.c) + '必须填 ' + ns.digit, target: [ns.r, ns.c] });
+                const desc = '【唯一候选】' + this._cellName(ns.r, ns.c) + '只剩 ' + ns.digit + ' 可填';
+                return { r: ns.r, c: ns.c, digit: ns.digit, explanation: desc, steps: stepList };
             }
             const hs = this._findHiddenSingle(cands);
             if (hs) {
-                let desc;
-                if (steps.length === 0) {
-                    desc = '【唯余法】' + hs.unitDesc + '的其他空格都不能填 ' + hs.digit + '，只有这一格能填 ' + hs.digit;
-                } else {
-                    desc = steps.join('；') + ' → 排除后，' + hs.unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
+                const unitDesc = this._unitDesc(hs.unitType, hs.unitIndex);
+                const stepList = steps.slice();
+                if (stepList.length === 0) {
+                    stepList.push({ text: '注意' + unitDesc + '（高亮区域）', region: { type: hs.unitType, index: hs.unitIndex } });
+                    stepList.push({ text: unitDesc + '中除了' + this._cellName(hs.r, hs.c) + '，其他空格受所在列、宫的数字 ' + hs.digit + ' 约束，都不能填 ' + hs.digit, cells: this._unitEmptyCells(grid, hs.unitType, hs.unitIndex).filter(([r, c]) => !(r === hs.r && c === hs.c)) });
                 }
-                return { r: hs.r, c: hs.c, digit: hs.digit, explanation: desc };
+                stepList.push({ text: '因此' + this._cellName(hs.r, hs.c) + '必须填 ' + hs.digit, target: [hs.r, hs.c] });
+                const desc = '【唯余法】' + unitDesc + '只有' + this._cellName(hs.r, hs.c) + '能填 ' + hs.digit;
+                return { r: hs.r, c: hs.c, digit: hs.digit, explanation: desc, steps: stepList };
             }
             const adv = this._findLocked(cands) || this._findNakedPair(cands) || this._findNakedTriple(cands)
                 || this._findHiddenPair(cands) || this._findXWing(cands) || this._findSwordfish(cands)
@@ -1525,7 +1612,7 @@ class HintEngine {
                 || this._findSimpleColoring(cands) || this._findXYWing(cands);
             if (!adv || adv.elim.length === 0) return null;
             for (const e of adv.elim) cands[e.r][e.c].delete(e.digit);
-            steps.push(adv.desc);
+            steps.push({ text: adv.desc, region: adv.region, cells: adv.patternCells });
         }
         return null;
     }
@@ -1541,11 +1628,17 @@ class HintEngine {
                 for (const trial of cands) {
                     const g = grid.map(row => [...row]);
                     g[r][c] = trial;
-                    if (this._propagateToContradiction(g)) {
+                    const contradiction = this._propagateToContradiction(g);
+                    if (contradiction) {
                         const answer = cands[0] === trial ? cands[1] : cands[0];
                         return {
                             r, c, digit: answer,
-                            explanation: '【矛盾试探】若' + this._cellName(r, c) + '填 ' + trial + '，则经推导后会产生矛盾（某格无候选数），因此' + this._cellName(r, c) + '必须填 ' + answer
+                            explanation: '【矛盾试探】若' + this._cellName(r, c) + '填 ' + trial + '，则经推导后会产生矛盾（某格无候选数），因此' + this._cellName(r, c) + '必须填 ' + answer,
+                            steps: [
+                                { text: '先假设' + this._cellName(r, c) + '填 ' + trial, region: { cells: [[r, c]] } },
+                                { text: '顺着唯一候选/唯余法推导，' + this._cellName(contradiction[0], contradiction[1]) + '将没有任何可填的数字，与数独规则矛盾', cells: [contradiction] },
+                                { text: '所以假设不成立，' + this._cellName(r, c) + '必须填 ' + answer, target: [r, c] },
+                            ]
                         };
                     }
                 }
@@ -1554,18 +1647,19 @@ class HintEngine {
         return null;
     }
 
+    // 返回矛盾格 [r,c]（或 null），供分步提示定位矛盾位置
     static _propagateToContradiction(grid) {
         for (let iter = 0; iter < 30; iter++) {
             const ns = this._findNakedSingleInGrid(grid);
             if (ns) {
-                if (ns.digit === -1) return true;
+                if (ns.digit === -1) return [ns.r, ns.c];
                 grid[ns.r][ns.c] = ns.digit; continue;
             }
             const hs = this._findHiddenSingleInGrid(grid);
             if (hs) { grid[hs.r][hs.c] = hs.digit; continue; }
-            return false;
+            return null;
         }
-        return false;
+        return null;
     }
 
     static _findNakedSingleInGrid(grid) {
@@ -1605,7 +1699,7 @@ class HintEngine {
             for (let d = 1; d <= 9; d++) {
                 const pos = [];
                 for (const [r, c] of u.cells) if (cands[r][c].has(d)) pos.push([r, c]);
-                if (pos.length === 1) return { r: pos[0][0], c: pos[0][1], digit: d, unitDesc: this._unitDesc(u.type, u.index) };
+                if (pos.length === 1) return { r: pos[0][0], c: pos[0][1], digit: d, unitType: u.type, unitIndex: u.index };
             }
         }
         return null;
@@ -1626,14 +1720,22 @@ class HintEngine {
                     const elim = [];
                     for (let c = 0; c < 9; c++)
                         if ((c < bc || c >= bc + 3) && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                    if (elim.length) return { elim, desc: '【宫内排除】' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (r + 1) + '行，所以第' + (r + 1) + '行其余宫格排除 ' + d };
+                    if (elim.length) {
+                        const pattern = [];
+                        for (let c = bc; c < bc + 3; c++) if (cands[r][c].has(d)) pattern.push([r, c]);
+                        return { elim, region: { type: 'box', index: b }, patternCells: pattern, desc: '【宫内排除】' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (r + 1) + '行，所以第' + (r + 1) + '行其余宫格排除 ' + d };
+                    }
                 }
                 if (cols.size === 1) {
                     const c = [...cols][0];
                     const elim = [];
                     for (let r = 0; r < 9; r++)
                         if ((r < br || r >= br + 3) && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                    if (elim.length) return { elim, desc: '【宫内排除】' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (c + 1) + '列，所以第' + (c + 1) + '列其余宫格排除 ' + d };
+                    if (elim.length) {
+                        const pattern = [];
+                        for (let r = br; r < br + 3; r++) if (cands[r][c].has(d)) pattern.push([r, c]);
+                        return { elim, region: { type: 'box', index: b }, patternCells: pattern, desc: '【宫内排除】' + this.BOX_NAMES[b] + '宫中数字 ' + d + ' 只出现在第' + (c + 1) + '列，所以第' + (c + 1) + '列其余宫格排除 ' + d };
+                    }
                 }
             }
         }
@@ -1651,7 +1753,11 @@ class HintEngine {
                         const inUnit = u.type === 'row' ? r === u.index : c === u.index;
                         if (!inUnit && cands[r][c].has(d)) elim.push({ r, c, digit: d });
                     }
-                if (elim.length) return { elim, desc: '【行列排除】' + this._unitDesc(u.type, u.index) + '中数字 ' + d + ' 只出现在' + this.BOX_NAMES[b] + '宫，所以该宫其余格排除 ' + d };
+                if (elim.length) {
+                    const pattern = [];
+                    for (const [r, c] of u.cells) if (cands[r][c].has(d)) pattern.push([r, c]);
+                    return { elim, region: { type: u.type, index: u.index }, patternCells: pattern, desc: '【行列排除】' + this._unitDesc(u.type, u.index) + '中数字 ' + d + ' 只出现在' + this.BOX_NAMES[b] + '宫，所以该宫其余格排除 ' + d };
+                }
             }
         }
         return null;
@@ -1676,7 +1782,7 @@ class HintEngine {
                     if ((r === cells[0][0] && c === cells[0][1]) || (r === cells[1][0] && c === cells[1][1])) continue;
                     for (const d of [a, b]) if (cands[r][c].has(d)) elim.push({ r, c, digit: d });
                 }
-                if (elim.length) return { elim, desc: '【数对】' + this._unitDesc(u.type, u.index) + '中' + this._cellName(cells[0][0], cells[0][1]) + '与' + this._cellName(cells[1][0], cells[1][1]) + '的候选都只有 ' + a + '、' + b + '，两数必占这两格，所以其余格排除 ' + a + '、' + b };
+                if (elim.length) return { elim, region: { type: u.type, index: u.index }, patternCells: [[cells[0][0], cells[0][1]], [cells[1][0], cells[1][1]]], desc: '【数对】' + this._unitDesc(u.type, u.index) + '中' + this._cellName(cells[0][0], cells[0][1]) + '与' + this._cellName(cells[1][0], cells[1][1]) + '的候选都只有 ' + a + '、' + b + '，两数必占这两格，所以其余格排除 ' + a + '、' + b };
             }
         }
         return null;
@@ -1701,6 +1807,8 @@ class HintEngine {
                             }
                             if (elim.length) return {
                                 elim,
+                                region: { type: u.type, index: u.index },
+                                patternCells: [[empty[i].r, empty[i].c], [empty[j].r, empty[j].c], [empty[k].r, empty[k].c]],
                                 desc: '【三链数】' + this._unitDesc(u.type, u.index) + '中' + this._cellName(empty[i].r, empty[i].c) + '、' + this._cellName(empty[j].r, empty[j].c) + '、' + this._cellName(empty[k].r, empty[k].c) + '的候选恰好只有 ' + digits.join('、') + ' 三个数，构成三链数，其余格排除 ' + digits.join('、')
                             };
                         }
@@ -1728,7 +1836,7 @@ class HintEngine {
                         for (const [r, c] of c1)
                             for (const d of [...cands[r][c]])
                                 if (d !== digits[i] && d !== digits[j]) elim.push({ r, c, digit: d });
-                        if (elim.length) return { elim, desc: '【隐数对】' + this._unitDesc(u.type, u.index) + '中数字 ' + digits[i] + '、' + digits[j] + ' 只能放在' + this._cellName(c1[0][0], c1[0][1]) + '和' + this._cellName(c1[1][0], c1[1][1]) + '，所以这两格排除其他候选' };
+                        if (elim.length) return { elim, region: { type: u.type, index: u.index }, patternCells: [[c1[0][0], c1[0][1]], [c1[1][0], c1[1][1]]], desc: '【隐数对】' + this._unitDesc(u.type, u.index) + '中数字 ' + digits[i] + '、' + digits[j] + ' 只能放在' + this._cellName(c1[0][0], c1[0][1]) + '和' + this._cellName(c1[1][0], c1[1][1]) + '，所以这两格排除其他候选' };
                     }
                 }
             }
@@ -1752,7 +1860,7 @@ class HintEngine {
                         for (const c of a.cols)
                             for (let r = 0; r < 9; r++)
                                 if (r !== a.r && r !== b.r && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                        if (elim.length) return { elim, desc: '【X-Wing】数字 ' + d + ' 在第' + (a.r + 1) + '行和第' + (b.r + 1) + '行都只能放在第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列，形成矩形，所以第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列其余格排除 ' + d };
+                        if (elim.length) return { elim, region: { cells: [[a.r, a.cols[0]], [a.r, a.cols[1]], [b.r, a.cols[0]], [b.r, a.cols[1]]] }, patternCells: [[a.r, a.cols[0]], [a.r, a.cols[1]], [b.r, a.cols[0]], [b.r, a.cols[1]]], desc: '【X-Wing】数字 ' + d + ' 在第' + (a.r + 1) + '行和第' + (b.r + 1) + '行都只能放在第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列，形成矩形，所以第' + (a.cols[0] + 1) + '、' + (a.cols[1] + 1) + '列其余格排除 ' + d };
                     }
                 }
             }
@@ -1770,7 +1878,7 @@ class HintEngine {
                         for (const r of a.rows)
                             for (let c = 0; c < 9; c++)
                                 if (c !== a.c && c !== b.c && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                        if (elim.length) return { elim, desc: '【X-Wing】数字 ' + d + ' 在第' + (a.c + 1) + '列和第' + (b.c + 1) + '列都只能放在第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行，形成矩形，所以第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行其余格排除 ' + d };
+                        if (elim.length) return { elim, region: { cells: [[a.rows[0], a.c], [a.rows[1], a.c], [a.rows[0], b.c], [a.rows[1], b.c]] }, patternCells: [[a.rows[0], a.c], [a.rows[1], a.c], [a.rows[0], b.c], [a.rows[1], b.c]], desc: '【X-Wing】数字 ' + d + ' 在第' + (a.c + 1) + '列和第' + (b.c + 1) + '列都只能放在第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行，形成矩形，所以第' + (a.rows[0] + 1) + '、' + (a.rows[1] + 1) + '行其余格排除 ' + d };
                     }
                 }
             }
@@ -1798,7 +1906,11 @@ class HintEngine {
                             for (const c of cols)
                                 for (let r = 0; r < 9; r++)
                                     if (r !== rows[0] && r !== rows[1] && r !== rows[2] && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                            if (elim.length) return { elim, desc: '【Swordfish】数字 ' + d + ' 在第' + (rows[0] + 1) + '、' + (rows[1] + 1) + '、' + (rows[2] + 1) + '行中都只能放在第' + (cols[0] + 1) + '、' + (cols[1] + 1) + '、' + (cols[2] + 1) + '列，形成三行三列结构，这三列其余格排除 ' + d };
+                            if (elim.length) {
+                                const pattern = [];
+                                for (const r of rows) for (const c of cols) if (cands[r][c].has(d)) pattern.push([r, c]);
+                                return { elim, region: { cells: pattern }, patternCells: pattern, desc: '【Swordfish】数字 ' + d + ' 在第' + (rows[0] + 1) + '、' + (rows[1] + 1) + '、' + (rows[2] + 1) + '行中都只能放在第' + (cols[0] + 1) + '、' + (cols[1] + 1) + '、' + (cols[2] + 1) + '列，形成三行三列结构，这三列其余格排除 ' + d };
+                            }
                         }
                     }
                 }
@@ -1821,7 +1933,11 @@ class HintEngine {
                             for (const r of rows)
                                 for (let c = 0; c < 9; c++)
                                     if (c !== cols[0] && c !== cols[1] && c !== cols[2] && cands[r][c].has(d)) elim.push({ r, c, digit: d });
-                            if (elim.length) return { elim, desc: '【Swordfish】数字 ' + d + ' 在第' + (cols[0] + 1) + '、' + (cols[1] + 1) + '、' + (cols[2] + 1) + '列中都只能放在第' + (rows[0] + 1) + '、' + (rows[1] + 1) + '、' + (rows[2] + 1) + '行，形成三列三行结构，这三行其余格排除 ' + d };
+                            if (elim.length) {
+                                const pattern = [];
+                                for (const r of rows) for (const c of cols) if (cands[r][c].has(d)) pattern.push([r, c]);
+                                return { elim, region: { cells: pattern }, patternCells: pattern, desc: '【Swordfish】数字 ' + d + ' 在第' + (cols[0] + 1) + '、' + (cols[1] + 1) + '、' + (cols[2] + 1) + '列中都只能放在第' + (rows[0] + 1) + '、' + (rows[1] + 1) + '、' + (rows[2] + 1) + '行，形成三列三行结构，这三行其余格排除 ' + d };
+                            }
                         }
                     }
                 }
@@ -1867,7 +1983,8 @@ class HintEngine {
                     const r2c2 = b.cols[0] === base ? b.cols[1] : b.cols[0];
                     const elim = this._skyscraperElims(cands, d, a.r, r1c1, b.r, r2c2);
                     if (elim.length) {
-                        return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.r + 1) + '行只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '列，第' + (b.r + 1) + '行只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '列，两行共用第' + (base + 1) + '列作底墙，顶层' + this._cellName(a.r, r1c1) + '与' + this._cellName(b.r, r2c2) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
+                        const pattern = [[a.r, r1c1], [b.r, r2c2], [a.r, base], [b.r, base]];
+                        return { elim, region: { cells: pattern }, patternCells: pattern, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.r + 1) + '行只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '列，第' + (b.r + 1) + '行只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '列，两行共用第' + (base + 1) + '列作底墙，顶层' + this._cellName(a.r, r1c1) + '与' + this._cellName(b.r, r2c2) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
                     }
                 }
             }
@@ -1887,7 +2004,8 @@ class HintEngine {
                     const r2c2 = b.rows[0] === base ? b.rows[1] : b.rows[0];
                     const elim = this._skyscraperElims(cands, d, r1c1, a.c, r2c2, b.c);
                     if (elim.length) {
-                        return { elim, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.c + 1) + '列只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '行，第' + (b.c + 1) + '列只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '行，两列共用第' + (base + 1) + '行作底墙，顶层' + this._cellName(r1c1, a.c) + '与' + this._cellName(r2c2, b.c) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
+                        const pattern = [[r1c1, a.c], [r2c2, b.c], [base, a.c], [base, b.c]];
+                        return { elim, region: { cells: pattern }, patternCells: pattern, desc: '【摩天楼】数字 ' + d + ' 在第' + (a.c + 1) + '列只能放在第' + (base + 1) + '、' + (r1c1 + 1) + '行，第' + (b.c + 1) + '列只能放在第' + (base + 1) + '、' + (r2c2 + 1) + '行，两列共用第' + (base + 1) + '行作底墙，顶层' + this._cellName(r1c1, a.c) + '与' + this._cellName(r2c2, b.c) + '必有一个是 ' + d + '，所以同时看到这两格的格子排除 ' + d };
                     }
                 }
             }
@@ -1910,7 +2028,8 @@ class HintEngine {
                             if (cr2 === row.r || rc2 === col.c) continue; // 退化：目标格即模式自身的候选位
                             if (cands[cr2][rc2].has(d)) {
                                 const boxName = this.BOX_NAMES[Math.floor(cr / 3) * 3 + Math.floor(rc / 3)];
-                                return { elim: [{ r: cr2, c: rc2, digit: d }], desc: '【风筝】数字 ' + d + ' 在第' + (row.r + 1) + '行和第' + (col.c + 1) + '列各有两个候选位，其中一处同在' + boxName + '宫形成弱连接，故' + this._cellName(cr2, rc2) + '排除 ' + d };
+                                const pattern = [[row.r, rc], [row.r, rc2], [cr, col.c], [cr2, col.c]];
+                                return { elim: [{ r: cr2, c: rc2, digit: d }], region: { cells: pattern }, patternCells: pattern, desc: '【风筝】数字 ' + d + ' 在第' + (row.r + 1) + '行和第' + (col.c + 1) + '列各有两个候选位，其中一处同在' + boxName + '宫形成弱连接，故' + this._cellName(cr2, rc2) + '排除 ' + d };
                             }
                         }
                     }
@@ -1965,8 +2084,9 @@ class HintEngine {
                             const r2 = Math.floor(colored[ci][j] / 9), c2 = colored[ci][j] % 9;
                             if (r1 === r2 || c1 === c2 || (Math.floor(r1 / 3) === Math.floor(r2 / 3) && Math.floor(c1 / 3) === Math.floor(c2 / 3))) {
                                 const elim = [];
-                                for (const k of colored[ci]) elim.push({ r: Math.floor(k / 9), c: k % 9, digit: d });
-                                if (elim.length) return { elim, desc: '【单色链】数字 ' + d + ' 的强链着色中，' + this._cellName(r1, c1) + '和' + this._cellName(r2, c2) + '同色却位于同一约束区域（产生矛盾），故所有该颜色格排除 ' + d };
+                                const pattern = [];
+                                for (const k of colored[ci]) { elim.push({ r: Math.floor(k / 9), c: k % 9, digit: d }); pattern.push([Math.floor(k / 9), k % 9]); }
+                                if (elim.length) return { elim, region: { cells: pattern }, patternCells: pattern, desc: '【单色链】数字 ' + d + ' 的强链着色中，' + this._cellName(r1, c1) + '和' + this._cellName(r2, c2) + '同色却位于同一约束区域（产生矛盾），故所有该颜色格排除 ' + d };
                             }
                         }
                     }
@@ -1986,7 +2106,10 @@ class HintEngine {
                             const r2 = Math.floor(k2 / 9), c2 = k2 % 9;
                             if (r === r2 || c === c2 || (Math.floor(r / 3) === Math.floor(r2 / 3) && Math.floor(c / 3) === Math.floor(c2 / 3))) { sees1 = true; break; }
                         }
-                        if (sees1) return { elim: [{ r, c, digit: d }], desc: '【单色链】' + this._cellName(r, c) + '同时"看到"数字 ' + d + ' 的两种着色格，无论哪种色为真，该格都不能填 ' + d };
+                        if (sees1) {
+                            const pattern = [...colored[0].map(k => [Math.floor(k / 9), k % 9]), ...colored[1].map(k => [Math.floor(k / 9), k % 9])];
+                            return { elim: [{ r, c, digit: d }], region: { cells: pattern }, patternCells: pattern, desc: '【单色链】' + this._cellName(r, c) + '同时"看到"数字 ' + d + ' 的两种着色格，无论哪种色为真，该格都不能填 ' + d };
+                        }
                     }
                 }
             }
@@ -2040,6 +2163,8 @@ class HintEngine {
                                 }
                                 if (elim.length) return {
                                     elim,
+                                    region: { cells: [[r, c], [pr, pc], [qr, qc]] },
+                                    patternCells: [[r, c], [pr, pc], [qr, qc]],
                                     desc: '【XY-Wing】' + this._cellName(r, c) + '为轴心（候选 ' + x + '、' + y + '），' + this._cellName(pr, pc) + '为翼（候选 ' + shared + '、' + z + '），' + this._cellName(qr, qc) + '为翼（候选 ' + excl + '、' + z + '）。无论轴心取值如何，必有一翼为 ' + z + '，故同时看到两翼的格排除 ' + z
                                 };
                             }
@@ -3413,6 +3538,32 @@ class Renderer {
             }
         }
 
+        // Hint step region highlight (row/col/box/cells) + target fill
+        if (state.hintStep) {
+            const hs = state.hintStep;
+            const regionStyle = getComputedStyle(document.documentElement)
+                .getPropertyValue('--hint-region').trim() || 'rgba(255,213,79,0.22)';
+            ctx.fillStyle = regionStyle;
+            if (hs.region) {
+                if (hs.region.type === 'row') {
+                    ctx.fillRect(0, hs.region.index * cs, cs * 9, cs);
+                } else if (hs.region.type === 'col') {
+                    ctx.fillRect(hs.region.index * cs, 0, cs, cs * 9);
+                } else if (hs.region.type === 'box') {
+                    const br = Math.floor(hs.region.index / 3) * 3;
+                    const bc = (hs.region.index % 3) * 3;
+                    ctx.fillRect(bc * cs, br * cs, cs * 3, cs * 3);
+                } else if (hs.region.cells) {
+                    for (const [r, c] of hs.region.cells) ctx.fillRect(c * cs, r * cs, cs, cs);
+                }
+            }
+            if (hs.target) {
+                ctx.fillStyle = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--hint-target').trim() || 'rgba(251,192,45,0.35)';
+                ctx.fillRect(hs.target[1] * cs, hs.target[0] * cs, cs, cs);
+            }
+        }
+
         // Conflicts
         const conflicts = board.getConflicts();
         for (const key of conflicts) {
@@ -3539,8 +3690,30 @@ class Renderer {
     }
 
     _drawSelection(ctx, state) {
-        if (state.selectedRow === null || state.selectedCol === null) return;
         const cs = this.cellSize;
+
+        // Hint step cause cells (thin border) and target (thick border) — above grid lines
+        if (state.hintStep) {
+            const hs = state.hintStep;
+            const causeStyle = getComputedStyle(document.documentElement)
+                .getPropertyValue('--hint-cause').trim() || '#f9a825';
+            const targetStyle = getComputedStyle(document.documentElement)
+                .getPropertyValue('--hint-target').trim() || '#fbc02d';
+            if (hs.cells && hs.cells.length) {
+                ctx.strokeStyle = causeStyle;
+                ctx.lineWidth = 2;
+                for (const [r, c] of hs.cells) {
+                    ctx.strokeRect(c * cs + 1, r * cs + 1, cs - 2, cs - 2);
+                }
+            }
+            if (hs.target) {
+                ctx.strokeStyle = targetStyle;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(hs.target[1] * cs + 1.5, hs.target[0] * cs + 1.5, cs - 3, cs - 3);
+            }
+        }
+
+        if (state.selectedRow === null || state.selectedCol === null) return;
         ctx.strokeStyle = getComputedStyle(document.documentElement)
             .getPropertyValue('--selection-border').trim() || '#1976d2';
         ctx.lineWidth = 2.5;
@@ -4224,6 +4397,7 @@ class SudokuGame {
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
+        this.hintStep = null;
         this.sameNumHighlight = null;
 
         this._init();
@@ -4684,6 +4858,7 @@ class SudokuGame {
         this.paused = false;
         this.completed = false;
         this.hintCell = null;
+        this.hintStep = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
         this.lives = this.maxLives;
@@ -4960,7 +5135,7 @@ class SudokuGame {
             return;
         }
 
-        let r, c, answer, explanation;
+        let r, c, answer, explanation, steps;
 
         // Technique-based hint: naked/hidden single, locked candidates, pairs, X-Wing...
         const move = HintEngine.findMove(this.board.grid);
@@ -4969,6 +5144,7 @@ class SudokuGame {
             c = move.c;
             answer = move.digit;
             explanation = move.explanation;
+            steps = move.steps;
         } else {
             // Fallback (e.g. user errors on board): most constrained cell + solution value
             let bestCell = null, bestCount = 10;
@@ -4990,7 +5166,8 @@ class SudokuGame {
             answer = this.board.getHint(r, c);
             const reasonResult = this._buildHintReason(r, c, answer);
             if (reasonResult) {
-                explanation = reasonResult;
+                explanation = reasonResult.text;
+                steps = reasonResult.steps;
             } else {
                 const contMove = HintEngine.findMoveWithContradiction(this.board.grid);
                 if (contMove && contMove.digit === this.board.getHint(contMove.r, contMove.c)) {
@@ -4998,18 +5175,24 @@ class SudokuGame {
                     c = contMove.c;
                     answer = contMove.digit;
                     explanation = contMove.explanation;
+                    steps = contMove.steps;
                 } else {
                     const cands = Validator.getCandidates(this.board.grid, r, c);
                     explanation = '【候选分析】' + HintEngine._cellName(r, c) + '当前候选数为[' + cands.join(',') + ']，该格受行列宫多重交叉约束，需组合排除法推导。建议先用候选笔记辅助分析。';
+                    steps = [
+                        { text: '注意' + HintEngine._cellName(r, c) + '（高亮格），它的候选数字是 [' + cands.join(',') + ']', region: { cells: [[r, c]] } },
+                        { text: '该格同时受所在行、列、宫的多重约束，当前没有单一的技巧能直接确定数字', cells: HintEngine._filledNeighbors(this.board.grid, r, c) },
+                        { text: '建议先用一键笔记记录候选，再配合上面的技巧逐步推导' },
+                    ];
                 }
             }
         }
 
         this._hideSmartHint();
         this.selectCell(r, c);
-        this._pendingHint = { r, c, answer, explanation };
+        this._pendingHint = { r, c, answer, explanation, steps };
         this.hints.use();
-        this._showSmartHint(answer, explanation, r, c);
+        this._showSmartHint(answer, explanation, r, c, steps);
         this.sound.play('prop_notice');
         this._render();
     }
@@ -5036,11 +5219,19 @@ class SudokuGame {
                 else boxEmpty++;
         const cands = Validator.getCandidates(this.board.grid, row, col);
         if (cands.length === 1) {
-            if (rowEmpty === 1) return '【唯余法】第'+(row+1)+'行只剩这一格未填，必须填'+answer;
-            if (colEmpty === 1) return '【唯余法】第'+(col+1)+'列只剩这一格未填，必须填'+answer;
-            const boxLabel = ['左上','上','右上','左','中','右','左下','下','右下'][Math.floor(row/3)*3+Math.floor(col/3)];
-            if (boxEmpty === 1) return '【唯余法】'+boxLabel+'宫只剩这一格未填，必须填'+answer;
-            return '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
+            const cellName = HintEngine._cellName(row, col);
+            const filled = HintEngine._filledNeighbors(this.board.grid, row, col);
+            let text;
+            if (rowEmpty === 1) text = '【唯余法】第'+(row+1)+'行只剩这一格未填，必须填'+answer;
+            else if (colEmpty === 1) text = '【唯余法】第'+(col+1)+'列只剩这一格未填，必须填'+answer;
+            else if (boxEmpty === 1) text = '【唯余法】该宫只剩这一格未填，必须填'+answer;
+            else text = '【唯一候选】该格所在行、列、宫已包含其他8个数字，必须填'+answer;
+            const steps = [
+                { text: '注意' + cellName + '（高亮格），它所在的这一行、列、宫只剩一个候选数字 ' + answer, region: { cells: [[row, col]] } },
+                { text: '该格所在的行已有[' + [...rowNums].join(',') + ']，列已有[' + [...colNums].join(',') + ']，宫已有[' + [...boxNums].join(',') + ']，只有 ' + answer + ' 没有出现过', cells: filled },
+                { text: '因此' + cellName + '必须填 ' + answer, target: [row, col] },
+            ];
+            return { text, steps };
         }
         return null;
     }
@@ -5160,6 +5351,8 @@ class SudokuGame {
         this.noteMode = false;
         this.paused = false;
         this.completed = false;
+        this.hintCell = null;
+        this.hintStep = null;
         document.getElementById('pause-overlay').classList.remove('active');
         this.dialogs.hide();
         this.hintCell = null;
@@ -5336,19 +5529,73 @@ class SudokuGame {
         }
     }
 
-    _showSmartHint(num, reason, row, col) {
+    _showSmartHint(num, reason, row, col, steps) {
         const hintEl = document.getElementById('smart-hint');
         const reasonEl = document.getElementById('smart-hint-reason');
         const backdrop = document.getElementById('hint-backdrop');
         if (!hintEl || !reasonEl) return;
-        reasonEl.textContent = reason;
+
+        this._hintSteps = steps && steps.length ? steps : null;
+        this._hintStepIndex = 0;
+
+        const renderStep = () => {
+            const idx = this._hintStepIndex;
+            const total = this._hintSteps ? this._hintSteps.length : 1;
+
+            const stepsEl = document.getElementById('smart-hint-steps');
+            if (stepsEl) {
+                if (this._hintSteps) {
+                    let dots = '';
+                    for (let i = 0; i < total; i++) {
+                        dots += '<span class="smart-hint-step-dot' + (i === idx ? ' active' : '') + '"></span>';
+                    }
+                    stepsEl.textContent = '';
+                    stepsEl.innerHTML = '步骤 ' + (idx + 1) + '/' + total;
+                    const dotWrap = document.createElement('span');
+                    dotWrap.style.display = 'inline-flex';
+                    dotWrap.style.gap = '4px';
+                    dotWrap.style.marginLeft = '6px';
+                    dotWrap.innerHTML = dots;
+                    stepsEl.appendChild(dotWrap);
+                } else {
+                    stepsEl.innerHTML = '';
+                }
+            }
+
+            if (this._hintSteps) {
+                reasonEl.textContent = this._hintSteps[idx].text;
+            } else {
+                reasonEl.textContent = reason;
+            }
+
+            // 同步棋盘高亮：当前步的 region/cells/target
+            this.hintStep = this._hintSteps ? this._hintSteps[idx] : null;
+            this._render();
+
+            const prevBtn = document.getElementById('smart-hint-prev');
+            const applyBtn = document.getElementById('smart-hint-apply');
+            if (prevBtn) prevBtn.style.visibility = idx > 0 ? 'visible' : 'hidden';
+            if (applyBtn) applyBtn.textContent = (this._hintSteps && idx < total - 1) ? '下一步' : '应用';
+        };
+
         document.getElementById('smart-hint-apply').onclick = () => {
+            if (this._hintSteps && this._hintStepIndex < this._hintSteps.length - 1) {
+                this._hintStepIndex++;
+                renderStep();
+                return;
+            }
             this._hideSmartHint();
             if (this._pendingHint) {
                 this._applyHint();
             } else {
                 this.selectCell(row, col);
                 this.inputNumber(num);
+            }
+        };
+        document.getElementById('smart-hint-prev').onclick = () => {
+            if (this._hintStepIndex > 0) {
+                this._hintStepIndex--;
+                renderStep();
             }
         };
         document.getElementById('smart-hint-close').onclick = () => {
@@ -5363,6 +5610,7 @@ class SudokuGame {
             };
             backdrop.classList.add('active');
         }
+        renderStep();
         hintEl.style.display = 'flex';
         // Use fixed bottom positioning — always visible regardless of cell
         hintEl.style.bottom = '80px';
@@ -5374,6 +5622,9 @@ class SudokuGame {
     _hideSmartHint() {
         const hintEl = document.getElementById('smart-hint');
         const backdrop = document.getElementById('hint-backdrop');
+        this.hintStep = null;
+        this._hintSteps = null;
+        this._hintStepIndex = 0;
         if (hintEl) {
             hintEl.style.display = 'none';
             hintEl.style.bottom = '';
@@ -5594,6 +5845,7 @@ class SudokuGame {
             selectedCol: this.selectedCol,
             sameNumHighlight: this.sameNumHighlight,
             hintCell: this.hintCell,
+            hintStep: this.hintStep,
             boldNoteNum: this._getBoldNoteNum(),
         };
         this.renderer.draw(this.board, state);
