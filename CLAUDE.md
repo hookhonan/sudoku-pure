@@ -97,6 +97,7 @@ JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjd
   - 解释统一带 `【技巧名】` 前缀，措辞用"必须填"，禁用"推荐"
   - 全部技巧找不到时 `findMoveWithContradiction()` 对双候选格做矛盾试探（Nishio），确定"必须填"的值
   - `useHint()` 先用引擎，校验 digit 与解答一致（防止盘面有误导致推导错误），否则回退 `_buildHintReason`（仅裸单/隐单），最后走矛盾试探
+  - **技巧正确性验证**：每个消除步骤必须满足 `solution[格] !== 消除的数字`（唯一解前提）。曾因摩天楼误删解答值导致后续提示全部错误——消除只能发生在"同时看到两个顶层格"的格上，绝不能在整列/整行盲删。改动 HintEngine 后必须跑全难度逐消除校验
   - 冒烟测试脚本模式：提取 script 块 → eval + `({classes})` → 用 LEVEL_PACK 逐关求解验证
 - **锁屏/切后台自动暂停**: `visibilitychange` hidden 时 `_save()` + `pause(true)`（静默暂停，不播声音），Timer 用 setInterval 计数
 - **数字键盘**: hover 样式必须包在 `@media (hover: hover) and (pointer: fine)` 内，否则触屏点击后蓝框残留（sticky hover）
@@ -118,6 +119,10 @@ JAVAC="C:/Users/Administrator/Downloads/eclipse/plugins/org.eclipse.justj.openjd
 ### 图标
 - 原创设计：靛蓝渐变背景 + 3×3 圆角马赛克（四角白、边半透明、中心琥珀色）
 - 自适应图标用 vector drawable（`res/drawable/ic_launcher_*.xml`），各密度 PNG 由 `gen_icon.py` 渲染
+
+### WebView 崩溃防护（2026-08 实测）
+- `onRenderProcessGone` 后 `recreate()` 必须 post 到主循环执行，且 onPause/onResume/onBackPressed 必须对 webView 判空——MIUI 首启冷加载渲染进程被杀时，同步 recreate 会重入生命周期导致空指针闪退
+- JS 侧旧存档（跨版本升级保留的 localStorage）字段缺失会在 continueGame 崩溃，`_restoreGame` 必须校验 puzzle/grid/notes 结构，`selectedRow` 等字段用 `?? null` 兜底（`=== null` 守卫挡不住 undefined）
 
 ### APK 构建要点
 - `d8` 和 `apksigner` 是 `.bat` 包装，bash 环境下直接用 `java -cp lib/d8.jar com.android.tools.r8.D8` 更可靠
