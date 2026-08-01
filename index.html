@@ -1663,18 +1663,18 @@ class HintEngine {
             if (ns) {
                 const stepList = steps.slice();
                 if (stepList.length === 0) {
-                    // 目标格的行/列不主动高亮；带线与原因格由全盘扫描决定（与唯余法同规则）
-                    const scan = this._scanLines(grid, ns.digit, ns.r, ns.c);
+                    // 唯一候选：高亮目标格所在的行、列、宫 + 行列宫内已填数字格（原因格）
                     stepList.push({
                         text: '【唯一候选】' + this._cellName(ns.r, ns.c) + ' 所在行、列、宫已出现其余 8 个数字，只剩 ' + ns.digit + ' 可填，因此必须填 ' + ns.digit,
                         region: {
                             cells: [[ns.r, ns.c]],
                             lines: [
+                                { type: 'row', index: ns.r },
+                                { type: 'col', index: ns.c },
                                 { type: 'box', index: Math.floor(ns.r / 3) * 3 + Math.floor(ns.c / 3) }
                             ]
                         },
-                        lines: scan.lines,
-                        fillCells: scan.litSources,
+                        fillCells: this._filledNeighbors(grid, ns.r, ns.c),
                         target: [ns.r, ns.c],
                         targetDigit: ns.digit
                     });
@@ -5487,7 +5487,7 @@ class SudokuGame {
         const cands = Validator.getCandidates(this.board.grid, row, col);
         if (cands.length === 1) {
             const cellName = HintEngine._cellName(row, col);
-            const scan = HintEngine._scanLines(this.board.grid, answer, row, col);
+            const filled = HintEngine._filledNeighbors(this.board.grid, row, col);
             let text;
             if (rowEmpty === 1) text = '【唯余法】第'+(row+1)+'行只剩这一格未填，必须填'+answer;
             else if (colEmpty === 1) text = '【唯余法】第'+(col+1)+'列只剩这一格未填，必须填'+answer;
@@ -5499,11 +5499,12 @@ class SudokuGame {
                     region: {
                         cells: [[row, col]],
                         lines: [
+                            { type: 'row', index: row },
+                            { type: 'col', index: col },
                             { type: 'box', index: Math.floor(row / 3) * 3 + Math.floor(col / 3) }
                         ]
                     },
-                    lines: scan.lines,
-                    fillCells: scan.litSources,
+                    fillCells: filled,
                     target: [row, col],
                     targetDigit: answer
                 },
