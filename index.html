@@ -1669,10 +1669,24 @@ class HintEngine {
                             if (!seen.has(br * 9 + bc)) { seen.add(br * 9 + bc); sources.push([br, bc]); }
                         }
                     }
+                    // 每个原因格带出的整行/整列：选能作用到目标单位的方向。
+                    // 宫单位：原因格的行在目标宫行范围 → 该4沿行约束目标宫，带该行；
+                    //         否则列的列在目标宫列范围 → 沿列约束，带该列。
+                    // 行/列单位：保留就近判定。目标格所在的行/列一律不高亮。
                     const lines = [];
-                    for (const [br, bc] of sources) {
-                        const type = bc === hs.c ? 'col' : Math.abs(br - hs.r) >= Math.abs(bc - hs.c) ? 'row' : 'col';
-                        const idx = type === 'row' ? br : bc;
+                    const ubr = Math.floor(hs.r / 3) * 3, ubc = Math.floor(hs.c / 3) * 3;
+                    for (const [br2, bc2] of sources) {
+                        let type, idx;
+                        if (hs.unitType === 'box') {
+                            if (br2 >= ubr && br2 < ubr + 3) { type = 'row'; idx = br2; }
+                            else if (bc2 >= ubc && bc2 < ubc + 3) { type = 'col'; idx = bc2; }
+                            else continue;
+                        } else {
+                            type = bc2 === hs.c ? 'col' : Math.abs(br2 - hs.r) >= Math.abs(bc2 - hs.c) ? 'row' : 'col';
+                            idx = type === 'row' ? br2 : bc2;
+                        }
+                        if (type === 'row' && idx === hs.r) continue;
+                        if (type === 'col' && idx === hs.c) continue;
                         if (!lines.some(l => l.type === type && l.index === idx)) lines.push({ type, index: idx });
                     }
                     const dimCells = [];
