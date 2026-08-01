@@ -1670,10 +1670,13 @@ class HintEngine {
                     // 每个原因格带出的整行/整列：选能作用到目标单位的方向。
                     // 宫单位：原因格的行在目标宫行范围 → 该4沿行约束目标宫，带该行；
                     //         否则列的列在目标宫列范围 → 沿列约束，带该列。
-                    // 带线规则（所有单位统一）：原因格的行经过目标宫（目标格所在宫的行范围）
-                    // → 带该行（该4沿行约束目标宫）；否则列的列经过目标宫列范围 → 带该列；
-                    // 行和列都不经过目标宫 → 该原因格本身也不高亮（线不亮、格不亮）。
-                    // 目标格所在的行/列一律不主动高亮。
+                    // 带线规则（所有单位统一）：
+                    // 1. 原因格的行经过目标宫（目标格所在宫的行范围）→ 带该行（该4沿行约束目标宫）；
+                    //    否则列的列经过目标宫列范围 → 带该列；
+                    // 2. 行和列都不经过目标宫 → 该原因格本身也不高亮（线不亮、格不亮）；
+                    // 3. 线与目标宫的交叉格中必须至少有一个待排除的空格，否则线无意义（如该行在宫内已填满）
+                    //    → 线不亮，原因格也不亮；
+                    // 4. 目标格所在的行/列一律不主动高亮。
                     const lines = [];
                     const litSources = [];
                     const ubr = Math.floor(hs.r / 3) * 3, ubc = Math.floor(hs.c / 3) * 3;
@@ -1681,11 +1684,16 @@ class HintEngine {
                         const rowInBox = br2 >= ubr && br2 < ubr + 3;
                         const colInBox = bc2 >= ubc && bc2 < ubc + 3;
                         if (!rowInBox && !colInBox) continue;
-                        litSources.push([br2, bc2]);
                         const type = rowInBox ? 'row' : 'col';
                         const idx = rowInBox ? br2 : bc2;
                         if (type === 'row' && idx === hs.r) continue;
                         if (type === 'col' && idx === hs.c) continue;
+                        // 交叉格（线与目标宫相交的三格）中至少有一个空格（空格与原因格同行/列必被排除）
+                        const crosses = type === 'row'
+                            ? [[idx, ubc], [idx, ubc + 1], [idx, ubc + 2]]
+                            : [[ubr, idx], [ubr + 1, idx], [ubr + 2, idx]];
+                        if (!crosses.some(([cr, cc]) => grid[cr][cc] === 0)) continue;
+                        litSources.push([br2, bc2]);
                         if (!lines.some(l => l.type === type && l.index === idx)) lines.push({ type, index: idx });
                     }
                     const dimCells = [];
@@ -5941,6 +5949,8 @@ class SudokuGame {
             clearInterval(this._hintFlashTimer);
             this._hintFlashTimer = null;
         }
+        // 画布不自动清空：必须重绘一次，否则最后一步的闪烁数字残留在目标空格上
+        this._render();
         if (hintEl) {
             hintEl.style.display = 'none';
             hintEl.style.bottom = '';
