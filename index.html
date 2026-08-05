@@ -6035,6 +6035,8 @@ class SudokuGame {
         if (this.paused || this.completed) return;
         if (!this.noteMark) return;
         if (this.noteMarkRestored) {
+            // 撤销回溯：当前（标记快照）笔记数字全部收回到标记按钮
+            this._animateMarkToButton();
             this.board.notes = this.noteMarkBackup ? this._snapshotNotes(this.noteMarkBackup) : this.board.notes;
             this.noteMarkRestored = false;
             this.noteMarkBackup = null;
