@@ -487,6 +487,13 @@ body {
     #bottom-spacer {
         flex: 0.5 0.5 0%;
     }
+    /* 7 个工具按钮挤得下：缩小按钮 */
+    .action-btn {
+        width: 44px;
+        height: 48px;
+        font-size: 0.62rem;
+    }
+    .action-btn .icon { font-size: 1.05rem; }
 }
 
 /* ── Tool Bar ── */
@@ -1233,6 +1240,8 @@ body {
     <button class="action-btn" id="btn-note"><span class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span><span>笔记</span></button>
     <button class="action-btn" id="btn-autonote"><span class="icon" id="btn-autonote-icon">✍</span><span id="btn-autonote-text">一键笔记</span></button>
     <button class="action-btn" id="btn-hint"><span class="icon">💡</span><span>提示</span><span id="hint-count">3</span></button>
+    <button class="action-btn" id="btn-note-mark"><span class="icon">📌</span><span id="btn-note-mark-text">标记笔记</span></button>
+    <button class="action-btn" id="btn-note-restore"><span class="icon" id="btn-note-restore-icon">⏪</span><span id="btn-note-restore-text">回溯笔记</span></button>
 </div>
 
 <div id="numpad" style="display:none">
@@ -4275,6 +4284,8 @@ class InputHandler {
         document.getElementById('btn-autonote')?.addEventListener('click', () => this.game.autoNote());
         document.getElementById('btn-erase')?.addEventListener('click', () => this.game.erase());
         document.getElementById('btn-hint')?.addEventListener('click', () => this.game.useHint());
+        document.getElementById('btn-note-mark')?.addEventListener('click', () => this.game.markNotes());
+        document.getElementById('btn-note-restore')?.addEventListener('click', () => this.game.restoreNotes());
         document.getElementById('btn-pause')?.addEventListener('click', () => this.game.pause());
 
         document.getElementById('btn-new-game')?.addEventListener('click', () => {
@@ -4726,6 +4737,9 @@ class SudokuGame {
         this._hintFlash = true;
         this._hintFlashTimer = null;
         this.sameNumHighlight = null;
+        this.noteMark = null;
+        this.noteMarkBackup = null;
+        this.noteMarkRestored = false;
 
         this._init();
     }
@@ -5190,6 +5204,9 @@ class SudokuGame {
         this._hintFlashTimer = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
+        this.noteMark = null;
+        this.noteMarkBackup = null;
+        this.noteMarkRestored = false;
         this.lives = this.maxLives;
         this.selectCell(-1, -1);
 
@@ -5247,9 +5264,14 @@ class SudokuGame {
             this.history.pointer = saved.historyPointer;
         }
 
+        this.noteMark = saved.noteMark ? saved.noteMark.map(row => row.map(a => new Set(a))) : null;
+        this.noteMarkBackup = saved.noteMarkBackup ? saved.noteMarkBackup.map(row => row.map(a => new Set(a))) : null;
+        this.noteMarkRestored = !!saved.noteMarkRestored;
+
         this.paused = false;
         this._updateDifficultyLabel();
         this._updateToolbarState();
+        this._updateNoteMarkButton();
         this._resize();
         return true;
     }
@@ -5314,6 +5336,7 @@ class SudokuGame {
         if (num !== 0 && this.board.isCorrect(r, c)) {
             this.sound.play('num_right');
             relatedNotes = this._removeRelatedNotes(num, r, c);
+            this._clearNoteMarkOnCorrectFill();
         }
 
         this.history.push({
@@ -5701,6 +5724,9 @@ class SudokuGame {
         this.hintCell = null;
         this.sameNumHighlight = null;
         this._pendingHint = null;
+        this.noteMark = null;
+        this.noteMarkBackup = null;
+        this.noteMarkRestored = false;
         this.lives = this.maxLives;
         // Reset grid to initial puzzle (only given cells)
         for (let r = 0; r < 9; r++)
@@ -6007,6 +6033,92 @@ class SudokuGame {
         if (backdrop) backdrop.classList.remove('active');
     }
 
+    // 标记当前棋盘笔记为快照；已有标记则替换为当前状态
+    markNotes() {
+        if (this.paused || this.completed) return;
+        this.noteMark = this._snapshotNotes(this.board.notes);
+        this.noteMarkBackup = null;
+        this.noteMarkRestored = false;
+        this.sound.play('btn_click');
+        this._updateNoteMarkButton();
+        this._animateBoardToMark();
+        this._save();
+    }
+
+    // 回溯笔记：恢复标记快照；已回溯时变为撤销回溯，回到回溯前的笔记状态
+    restoreNotes() {
+        if (this.paused || this.completed) return;
+        if (!this.noteMark) return;
+        if (this.noteMarkRestored) {
+            this.board.notes = this.noteMarkBackup ? this._snapshotNotes(this.noteMarkBackup) : this.board.notes;
+            this.noteMarkRestored = false;
+            this.noteMarkBackup = null;
+        } else {
+            this.noteMarkBackup = this._snapshotNotes(this.board.notes);
+            this.board.notes = this._snapshotNotes(this.noteMark);
+            this.noteMarkRestored = true;
+        }
+        this.sound.play('prop_note');
+        this._updateNoteMarkButton();
+        this._updateNumPadHighlight();
+        this._render();
+        this._save();
+    }
+
+    _snapshotNotes(notes) {
+        return notes.map(row => row.map(s => new Set(s)));
+    }
+
+    // 正确数字填入空格时自动取消标记（也不能回溯）
+    _clearNoteMarkOnCorrectFill() {
+        if (!this.noteMark) return;
+        this.noteMark = null;
+        this.noteMarkBackup = null;
+        this.noteMarkRestored = false;
+        this._updateNoteMarkButton();
+    }
+
+    _updateNoteMarkButton() {
+        const markBtn = document.getElementById('btn-note-mark');
+        const restoreBtn = document.getElementById('btn-note-restore');
+        const restoreText = document.getElementById('btn-note-restore-text');
+        if (markBtn) markBtn.classList.toggle('active', !!this.noteMark);
+        if (!restoreBtn || !restoreText) return;
+        if (!this.noteMark) {
+            restoreBtn.classList.add('disabled');
+            restoreBtn.classList.remove('active');
+            restoreText.textContent = '回溯笔记';
+        } else if (this.noteMarkRestored) {
+            restoreBtn.classList.remove('disabled');
+            restoreBtn.classList.add('active');
+            restoreText.textContent = '撤销回溯';
+        } else {
+            restoreBtn.classList.remove('disabled', 'active');
+            restoreText.textContent = '回溯笔记';
+        }
+    }
+
+    // 标记笔记动效：棋盘吸入标记按钮位置再弹回
+    _animateBoardToMark() {
+        const canvas = document.getElementById('board-canvas');
+        const btn = document.getElementById('btn-note-mark');
+        if (!canvas || !btn) return;
+        const cr = canvas.getBoundingClientRect();
+        const br = btn.getBoundingClientRect();
+        const tx = (br.left + br.width / 2) - (cr.left + cr.width / 2);
+        const ty = (br.top + br.height / 2) - (cr.top + cr.height / 2);
+        canvas.style.transition = 'transform 0.4s cubic-bezier(0.6,-0.3,0.8,0.4), opacity 0.4s ease';
+        canvas.style.transformOrigin = 'center center';
+        canvas.style.transform = `translate(${tx}px, ${ty}px) scale(0.08)`;
+        canvas.style.opacity = '0.25';
+        setTimeout(() => {
+            canvas.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease';
+            canvas.style.transform = '';
+            canvas.style.opacity = '';
+            setTimeout(() => { canvas.style.transition = ''; }, 320);
+        }, 420);
+    }
+
     _updateAutoNoteButton() {
         const btn = document.getElementById('btn-autonote');
         const icon = document.getElementById('btn-autonote-icon');
@@ -6120,6 +6232,7 @@ class SudokuGame {
         }
         this._updateHintButton();
         this._updateAutoNoteButton();
+        this._updateNoteMarkButton();
 
         const undoBtn = document.getElementById('btn-undo');
         if (this.history.canUndo()) {
@@ -6175,6 +6288,9 @@ class SudokuGame {
             lives: this.lives,
             maxLives: this.maxLives,
             autoNoteEnabled: this.autoNoteEnabled,
+            noteMark: this.noteMark ? this.noteMark.map(row => row.map(s => [...s])) : null,
+            noteMarkBackup: this.noteMarkBackup ? this.noteMarkBackup.map(row => row.map(s => [...s])) : null,
+            noteMarkRestored: this.noteMarkRestored,
         });
     }
 
