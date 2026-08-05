@@ -571,6 +571,10 @@ body {
     align-items: center;
     justify-content: center;
 }
+.pause-home-btn {
+    left: 12px;
+    right: auto;
+}
 .pause-close-btn:active { transform: scale(0.9); }
 
 #btn-hint { position: relative; }
@@ -1190,7 +1194,6 @@ body {
 <div id="top-nav" style="display:none">
     <div class="nav-left">
         <button class="tool-btn" id="btn-home" title="主页">⌂</button>
-        <button class="tool-btn" id="btn-new-game" title="新游戏">＋</button>
     </div>
     <div class="nav-right">
         <button class="tool-btn" id="btn-settings" title="设置">⚙</button>
@@ -1214,6 +1217,7 @@ body {
 <div id="board-container" style="display:none">
     <div id="pause-overlay">
         <div class="pause-panel">
+            <button class="pause-close-btn pause-home-btn" id="btn-pause-home" title="主页">⌂</button>
             <button class="pause-close-btn" id="btn-pause-close">×</button>
             <h2>暂停</h2>
             <div class="pause-btn-row"><button class="dialog-btn primary" id="btn-resume">继续游戏</button></div>
@@ -4284,12 +4288,15 @@ class InputHandler {
         document.getElementById('btn-hint')?.addEventListener('click', () => this.game.useHint());
         document.getElementById('btn-note-mark')?.addEventListener('click', () => this.game.markNotes());
         document.getElementById('btn-note-restore')?.addEventListener('click', () => this.game.restoreNotes());
-        document.getElementById('btn-pause')?.addEventListener('click', () => this.game.pause());
-
-        document.getElementById('btn-new-game')?.addEventListener('click', () => {
-            document.getElementById('dialog-difficulty').classList.add('active');
-            document.getElementById('dialog-overlay').classList.add('active');
+        document.getElementById('btn-pause')?.addEventListener('click', () => {
+            // 暂停按钮可切换：已暂停则继续游戏
+            if (this.game.paused) {
+                this.game.resume();
+            } else {
+                this.game.pause();
+            }
         });
+        document.getElementById('btn-pause-home')?.addEventListener('click', () => this.game.goHome());
 
         // Unified overlay click
         document.getElementById('dialog-overlay')?.addEventListener('click', (e) => {
@@ -5002,6 +5009,7 @@ class SudokuGame {
         }
         this.paused = false;
         this.dialogs.hide();
+        document.getElementById('pause-overlay')?.classList.remove('active');
         this._showStartScreen();
     }
 
