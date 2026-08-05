@@ -1343,10 +1343,6 @@ body {
                 <option value="5">5</option>
             </select>
         </div>
-        <div class="setting-row">
-            <label for="setting-autonote">一键笔记</label>
-            <label class="toggle"><input type="checkbox" id="setting-autonote"><span class="slider"></span></label>
-        </div>
         <div class="dialog-btn-row"><button class="dialog-btn primary" id="btn-close-settings">确定</button></div>
     </div>
 </div>
@@ -4354,7 +4350,6 @@ class InputHandler {
             document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'light';
             document.getElementById('setting-hearts').value = this.game.maxLives;
             document.getElementById('setting-disable').checked = this.game.disableImpossible;
-            document.getElementById('setting-autonote').checked = this.game.autoNoteEnabled;
             try {
                 document.getElementById('setting-fontsize').value = localStorage.getItem('sudoku_fontSize') || 'medium';
             } catch (e) {}
@@ -4387,11 +4382,6 @@ class InputHandler {
             this.game.disableImpossible = e.target.checked;
             try { localStorage.setItem('sudoku_disableImpossible', e.target.checked); } catch (e) {}
             this.game._updateNumPadHighlight();
-        });
-        document.getElementById('setting-autonote')?.addEventListener('change', (e) => {
-            this.game.autoNoteEnabled = e.target.checked;
-            try { localStorage.setItem('sudoku_autoNoteEnabled', e.target.checked); } catch (e) {}
-            this.game._updateAutoNoteButton();
         });
 
         // Confirm dialog
@@ -4725,7 +4715,7 @@ class SudokuGame {
         this.lives = 3;
         this.maxLives = 3;
         this.disableImpossible = false;
-        this.autoNoteEnabled = false;
+        this.autoNoteEnabled = true; // 一键笔记默认可用，每局仅一次
         this.levelManager = new LevelManager();
         this.dailyManager = new DailyManager();
         this.gameMode = 'random'; // 'level' or 'random'
@@ -5068,7 +5058,6 @@ class SudokuGame {
             const v = parseInt(localStorage.getItem('sudoku_maxLives'));
             if (v >= 1 && v <= 5) this.maxLives = v;
             this.disableImpossible = localStorage.getItem('sudoku_disableImpossible') === 'true';
-            this.autoNoteEnabled = localStorage.getItem('sudoku_autoNoteEnabled') === 'true';
         } catch (e) {}
     }
 
@@ -5254,7 +5243,7 @@ class SudokuGame {
         this.hints.autoNoteCleared = saved.autoNoteCleared ?? false;
         this.lives = saved.lives ?? this.maxLives;
         this.maxLives = saved.maxLives ?? 3;
-        this.autoNoteEnabled = saved.autoNoteEnabled ?? false;
+        this.autoNoteEnabled = true; // 一键笔记默认可用（旧存档缺字段也不会失效）
         this.gameMode = saved.gameMode || 'random';
         this.currentLevel = saved.currentLevel || 1;
         this.dailyDateKey = saved.dailyDateKey;
@@ -5676,12 +5665,6 @@ class SudokuGame {
     autoNote() {
         if (this.paused || this.completed) return;
         const btn = document.getElementById('btn-autonote');
-        if (!this.autoNoteEnabled) {
-            this.sound.play('num_error');
-            this._shakeElement(btn);
-            this._showAutoNoteTooltip();
-            return;
-        }
         if (this.hints.autoNoteUsed && this.hints.autoNoteCleared) {
             this.sound.play('num_error');
             this._shakeElement(btn);
@@ -6239,12 +6222,7 @@ class SudokuGame {
         const icon = document.getElementById('btn-autonote-icon');
         const text = document.getElementById('btn-autonote-text');
         if (!btn) return;
-        if (!this.autoNoteEnabled) {
-            btn.classList.add('auto-note-disabled');
-            btn.classList.remove('disabled');
-            if (icon) icon.textContent = '✍';
-            if (text) text.textContent = '一键笔记';
-        } else if (this.hints.autoNoteUsed && !this.hints.autoNoteCleared) {
+        if (this.hints.autoNoteUsed && !this.hints.autoNoteCleared) {
             btn.classList.remove('disabled', 'auto-note-disabled');
             if (icon) icon.textContent = '🧹';
             if (text) text.textContent = '一键擦除';
@@ -6258,20 +6236,6 @@ class SudokuGame {
             if (icon) icon.textContent = '✍';
             if (text) text.textContent = '一键笔记';
         }
-    }
-
-    _showAutoNoteTooltip() {
-        const btn = document.getElementById('btn-autonote');
-        if (!btn) return;
-        const rect = btn.getBoundingClientRect();
-        const tooltip = document.createElement('div');
-        tooltip.className = 'auto-note-tooltip';
-        tooltip.textContent = '请在设置中开启一键笔记功能';
-        tooltip.style.left = (rect.left + rect.width / 2) + 'px';
-        tooltip.style.top = (rect.top - 10) + 'px';
-        tooltip.style.transform = 'translate(-50%, -100%)';
-        document.body.appendChild(tooltip);
-        setTimeout(() => tooltip.remove(), 1000);
     }
 
     _showAutoNoteUsedTooltip() {
