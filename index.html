@@ -6041,7 +6041,7 @@ class SudokuGame {
         this.noteMarkRestored = false;
         this.sound.play('btn_click');
         this._updateNoteMarkButton();
-        this._animateBoardToMark();
+        this._animateMarkToButton();
         this._save();
     }
 
@@ -6054,9 +6054,11 @@ class SudokuGame {
             this.noteMarkRestored = false;
             this.noteMarkBackup = null;
         } else {
+            const marked = this.noteMark;
             this.noteMarkBackup = this._snapshotNotes(this.board.notes);
-            this.board.notes = this._snapshotNotes(this.noteMark);
+            this.board.notes = this._snapshotNotes(marked);
             this.noteMarkRestored = true;
+            this._animateRestoreParticles(marked);
         }
         this.sound.play('prop_note');
         this._updateNoteMarkButton();
@@ -6098,25 +6100,138 @@ class SudokuGame {
         }
     }
 
-    // 标记笔记动效：棋盘吸入标记按钮位置再弹回
-    _animateBoardToMark() {
-        const canvas = document.getElementById('board-canvas');
+    // ── 笔记粒子动效（覆盖层 canvas，棋盘不动）──
+
+    _ensureParticleLayer() {
+        if (this._pLayer) return;
+        const c = document.createElement('canvas');
+        c.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:500;display:none;';
+        document.body.appendChild(c);
+        this._pLayer = c;
+        this._pCtx = c.getContext('2d');
+    }
+
+    _resizeParticleLayer() {
+        const dpr = window.devicePixelRatio || 1;
+        this._pLayer.width = Math.round(window.innerWidth * dpr);
+        this._pLayer.height = Math.round(window.innerHeight * dpr);
+        this._pLayer.style.width = window.innerWidth + 'px';
+        this._pLayer.style.height = window.innerHeight + 'px';
+        this._pCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // 粒子飞行：x/y 起点 → tx/ty 终点；fade:'out' 渐隐消失；scale:'shrink' 逐渐缩小
+    _animateParticles(particles, duration) {
+        if (!particles.length) return;
+        this._ensureParticleLayer();
+        this._resizeParticleLayer();
+        const ctx = this._pCtx;
+        const w = window.innerWidth, h = window.innerHeight;
+        const start = performance.now();
+        const run = (t) => {
+            ctx.clearRect(0, 0, w, h);
+            let alive = false;
+            for (const pt of particles) {
+                const lp = (t - start - pt.delay) / duration;
+                if (lp <= 0) { alive = true; continue; }
+                if (lp >= 1) continue;
+                alive = true;
+                const s = lp * lp * (3 - 2 * lp); // smoothstep
+                const x = pt.x + (pt.tx - pt.x) * s;
+                const y = pt.y + (pt.ty - pt.y) * s;
+                let alpha = pt.fade === 'out' ? (1 - lp) : (lp < 0.15 ? lp / 0.15 : 1);
+                alpha *= pt.alpha ?? 0.95;
+                const scale = pt.scale === 'shrink' ? (1 - 0.75 * lp) : 1;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = pt.color || '#1565c0';
+                ctx.font = `bold ${Math.max(6, pt.size * scale)}px "Segoe UI", system-ui, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(pt.text, x, y);
+            }
+            ctx.globalAlpha = 1;
+            if (alive) {
+                requestAnimationFrame(run);
+            } else {
+                ctx.clearRect(0, 0, w, h);
+                this._pLayer.style.display = 'none';
+            }
+        };
+        this._pLayer.style.display = 'block';
+        requestAnimationFrame(run);
+    }
+
+    // 标记动效：每个笔记数字复制一份，从格子飞向标记按钮（吸收），棋盘不动
+    _animateMarkToButton() {
+        const canvas = this.renderer.canvas;
         const btn = document.getElementById('btn-note-mark');
         if (!canvas || !btn) return;
-        const cr = canvas.getBoundingClientRect();
-        const br = btn.getBoundingClientRect();
-        const tx = (br.left + br.width / 2) - (cr.left + cr.width / 2);
-        const ty = (br.top + br.height / 2) - (cr.top + cr.height / 2);
-        canvas.style.transition = 'transform 0.4s cubic-bezier(0.6,-0.3,0.8,0.4), opacity 0.4s ease';
-        canvas.style.transformOrigin = 'center center';
-        canvas.style.transform = `translate(${tx}px, ${ty}px) scale(0.08)`;
-        canvas.style.opacity = '0.25';
-        setTimeout(() => {
-            canvas.style.transition = 'transform 0.3s ease-out, opacity 0.3s ease';
-            canvas.style.transform = '';
-            canvas.style.opacity = '';
-            setTimeout(() => { canvas.style.transition = ''; }, 320);
-        }, 420);
+        const boardRect = canvas.getBoundingClientRect();
+        if (boardRect.width === 0) return;
+        const cs = boardRect.width / 9;
+        const btnRect = btn.getBoundingClientRect();
+        const cx = btnRect.left + btnRect.width / 2;
+        const cy = btnRect.top + btnRect.height / 2;
+        const particles = [];
+        let count = 0;
+        outer:
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const notes = this.board.notes[r][c];
+                if (notes.size === 0) continue;
+                const x = boardRect.left + (c + 0.5) * cs;
+                const y = boardRect.top + (r + 0.5) * cs;
+                for (const n of notes) {
+                    if (count >= 60) break outer;
+                    particles.push({ x, y, tx: cx, ty: cy, text: n, size: cs * 0.17, alpha: 0.95, fade: 'out', scale: 'shrink', delay: Math.random() * 140 });
+                    count++;
+                }
+            }
+        }
+        this._animateParticles(particles, 560);
+    }
+
+    // 回溯动效：恢复的笔记数字从按钮吐回原格；消失的笔记数字四散逃出屏幕；未动的无动画
+    _animateRestoreParticles(marked) {
+        const canvas = this.renderer.canvas;
+        const btn = document.getElementById('btn-note-restore');
+        if (!canvas || !btn) return;
+        const boardRect = canvas.getBoundingClientRect();
+        if (boardRect.width === 0) return;
+        const cs = boardRect.width / 9;
+        const btnRect = btn.getBoundingClientRect();
+        const cx = btnRect.left + btnRect.width / 2;
+        const cy = btnRect.top + btnRect.height / 2;
+        const particles = [];
+        const w = window.innerWidth, h = window.innerHeight;
+        const dist = Math.max(w, h) * 1.3;
+        // 对比对象：回溯前快照（noteMarkBackup，此时 board.notes 已是恢复后的标记快照）
+        const prev = this.noteMarkBackup;
+        outer:
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const x = boardRect.left + (c + 0.5) * cs;
+                const y = boardRect.top + (r + 0.5) * cs;
+                const cur = prev ? prev[r][c] : this.board.notes[r][c];
+                const mk = marked[r][c];
+                // 恢复的（标记有、回溯前无）：从按钮吐回原格
+                for (const n of mk) {
+                    if (!cur.has(n)) {
+                        if (particles.length >= 60) break outer;
+                        particles.push({ x: cx, y: cy, tx: x, ty: y, text: n, size: cs * 0.17, alpha: 0.95, delay: Math.random() * 120 });
+                    }
+                }
+                // 消失的（回溯前有、标记无）：四散逃出屏幕
+                for (const n of cur) {
+                    if (!mk.has(n)) {
+                        if (particles.length >= 60) break outer;
+                        const ang = Math.random() * Math.PI * 2;
+                        particles.push({ x, y, tx: x + Math.cos(ang) * dist, ty: y + Math.sin(ang) * dist, text: n, size: cs * 0.17, alpha: 0.9, fade: 'out', delay: Math.random() * 90 });
+                    }
+                }
+            }
+        }
+        this._animateParticles(particles, 600);
     }
 
     _updateAutoNoteButton() {
