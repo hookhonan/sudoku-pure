@@ -3926,6 +3926,8 @@ class Renderer {
 
                 const third = cs / 3;
                 for (const num of notes) {
+                    // 回溯动效期间隐藏待吐回的数字，粒子到达后才显示
+                    if (state.hiddenNoteKeys && state.hiddenNoteKeys.has(r * 81 + c * 9 + num)) continue;
                     const nr = Math.floor((num - 1) / 3);
                     const nc = (num - 1) % 3;
                     const x = c * cs + nc * third + third / 2;
@@ -6039,9 +6041,19 @@ class SudokuGame {
         } else {
             const marked = this.noteMark;
             this.noteMarkBackup = this._snapshotNotes(this.board.notes);
+            // 恢复的数字（标记有、回溯前无）：动效期间隐藏，粒子到达后才显示
+            const hidden = new Set();
+            for (let r = 0; r < 9; r++)
+                for (let c = 0; c < 9; c++)
+                    for (const n of marked[r][c])
+                        if (!this.noteMarkBackup[r][c].has(n)) hidden.add(r * 81 + c * 9 + n);
+            this._hiddenNoteKeys = hidden;
             this.board.notes = this._snapshotNotes(marked);
             this.noteMarkRestored = true;
-            this._animateRestoreParticles(marked);
+            this._animateRestoreParticles(marked, () => {
+                this._hiddenNoteKeys = null;
+                this._render();
+            });
         }
         this.sound.play('prop_note');
         this._updateNoteMarkButton();
@@ -6104,8 +6116,8 @@ class SudokuGame {
     }
 
     // 粒子飞行：x/y 起点 → tx/ty 终点；fade:'out' 渐隐消失；scale:'shrink' 逐渐缩小
-    _animateParticles(particles, duration) {
-        if (!particles.length) return;
+    _animateParticles(particles, duration, onComplete) {
+        if (!particles.length) { if (onComplete) onComplete(); return; }
         this._ensureParticleLayer();
         this._resizeParticleLayer();
         const ctx = this._pCtx;
@@ -6138,6 +6150,7 @@ class SudokuGame {
             } else {
                 ctx.clearRect(0, 0, w, h);
                 this._pLayer.style.display = 'none';
+                if (onComplete) onComplete();
             }
         };
         this._pLayer.style.display = 'block';
@@ -6175,7 +6188,7 @@ class SudokuGame {
     }
 
     // 回溯动效：恢复的笔记数字从按钮吐回原格；消失的笔记数字四散逃出屏幕；未动的无动画
-    _animateRestoreParticles(marked) {
+    _animateRestoreParticles(marked, onComplete) {
         const canvas = this.renderer.canvas;
         const btn = document.getElementById('btn-note-restore');
         if (!canvas || !btn) return;
@@ -6214,7 +6227,7 @@ class SudokuGame {
                 }
             }
         }
-        this._animateParticles(particles, 600);
+        this._animateParticles(particles, 600, onComplete);
     }
 
     _updateAutoNoteButton() {
@@ -6415,6 +6428,7 @@ class SudokuGame {
             hintStep: this.hintStep,
             hintFlash: this._hintFlash,
             boldNoteNum: this._getBoldNoteNum(),
+            hiddenNoteKeys: this._hiddenNoteKeys,
         };
         this.renderer.draw(this.board, state);
         this._updateToolbarState();
