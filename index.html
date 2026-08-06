@@ -4804,7 +4804,7 @@ class SudokuGame {
                     if (completed) {
                         this._showLevelInfo(difficulty, i);
                     } else {
-                        this.startGame(difficulty, 'level', i);
+                        this.startLevel(difficulty, i);
                     }
                 });
             }
@@ -4834,7 +4834,7 @@ class SudokuGame {
         document.getElementById('level-info-body').innerHTML = html;
         document.getElementById('btn-level-info-play').onclick = () => {
             this.dialogs.hide();
-            this.startGame(difficulty, 'level', level);
+            this.startLevel(difficulty, level);
         };
         document.getElementById('btn-level-info-close').onclick = () => this.dialogs.hide();
         this.dialogs.show('dialog-level-info');
@@ -5155,6 +5155,26 @@ class SudokuGame {
         this._resize();
         this._updateNumPadHighlight();
         this._render();
+    }
+
+    // 关卡模式入口：该关有未完成存档则恢复进度，否则开新局
+    startLevel(difficulty, level) {
+        const saved = Storage.loadGame();
+        if (saved && saved.gameStarted && saved.gameMode === 'level' &&
+            saved.difficulty === difficulty && saved.currentLevel === level) {
+            if (this._restoreGame(saved)) {
+                this.gameStarted = true;
+                this._hideStartScreen();
+                this._updateDifficultyLabel();
+                this._updateToolbarState();
+                this._updateHeartsDisplay();
+                this._resize();
+                this._updateNumPadHighlight();
+                this._render();
+                return;
+            }
+        }
+        this.startGame(difficulty, 'level', level);
     }
 
     startDaily(key) {
