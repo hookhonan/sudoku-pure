@@ -1,6 +1,15 @@
+# 构建产物
 apk-project/build*/
+apk-project/assets/
+sudoku-pure.apk
+*.idsig
+*.bak
+
+# 本地环境 / 工具链
 android-sdk/
 commandlinetools.zip
 *.keystore
-*.idsig
 emulator.log
+
+# 个人开发笔记（含本机路径与调试密钥信息，不随开源仓库发布）
+CLAUDE.md
