@@ -14,7 +14,7 @@
 
 ## 在线试玩
 
-GitHub Pages: https://hook.github.io/sudoku-pure/
+GitHub Pages: https://hookhonan.github.io/sudoku-pure/
 
 > 打开后建议"添加到主屏幕"，可作为 PWA 使用。
 
